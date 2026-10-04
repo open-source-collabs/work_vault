@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Debug builds trust the local rehearsal CA in addition to the system roots. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/work_vault_fixture_ca" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

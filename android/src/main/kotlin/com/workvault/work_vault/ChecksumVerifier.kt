@@ -1,0 +1,145 @@
+package com.workvault.work_vault
+
+import android.os.Process
+import java.io.File
+import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.security.MessageDigest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * SHA-256 and MD5 of a completed file, read from a direct disk buffer.
+ *
+ * Hashing runs at background thread priority and finishes before a task is marked complete.
+ */
+internal object ChecksumVerifier {
+    const val expectedSha256Header = "X-Work-Vault-Sha256"
+    const val expectedMd5Header = "X-Work-Vault-Md5"
+
+    private val dispatcher = Dispatchers.IO.limitedParallelism(1)
+
+    suspend fun verify(file: File, expectedSha256: String?, expectedMd5: String?): ChecksumVerdict {
+        return withContext(dispatcher) {
+            val previous = currentPriority()
+            setBackgroundPriority()
+            try {
+                if (!file.isFile) {
+                    return@withContext ChecksumVerdict.Rejected(
+                        DownloadOutcome.Failed("io", "The completed file is missing.", null, true),
+                    )
+                }
+                val digests = try {
+                    digestFile(file)
+                } catch (error: Exception) {
+                    return@withContext ChecksumVerdict.Rejected(
+                        DownloadOutcome.Failed("io", error.message ?: "The file could not be hashed.", null, true),
+                    )
+                }
+                evaluateChecksum(digests, expectedSha256, expectedMd5)
+            } finally {
+                restorePriority(previous)
+            }
+        }
+    }
+}
+
+internal sealed class ChecksumVerdict {
+    data class Verified(val sha256: String, val md5: String) : ChecksumVerdict()
+
+    data class Rejected(val failure: DownloadOutcome.Failed) : ChecksumVerdict()
+}
+
+internal data class FileDigests(val sha256Hex: String, val md5Hex: String)
+
+/** One sequential read of [file]. Both digests are updated from the same direct buffer. */
+internal fun digestFile(file: File): FileDigests {
+    val sha256 = MessageDigest.getInstance("SHA-256")
+    val md5 = MessageDigest.getInstance("MD5")
+    FileInputStream(file).channel.use { channel ->
+        val buffer = ByteBuffer.allocateDirect(256 * 1024)
+        while (true) {
+            buffer.clear()
+            val read = channel.read(buffer)
+            if (read < 0) {
+                break
+            }
+            if (read == 0) {
+                continue
+            }
+            buffer.flip()
+            val md5View = buffer.duplicate()
+            sha256.update(buffer)
+            md5.update(md5View)
+        }
+    }
+    return FileDigests(sha256Hex = sha256.digest().toHex(), md5Hex = md5.digest().toHex())
+}
+
+internal fun evaluateChecksum(
+    digests: FileDigests,
+    expectedSha256: String?,
+    expectedMd5: String?,
+): ChecksumVerdict {
+    val sha = normalizeHexDigest(expectedSha256, 32)
+    val md5 = normalizeHexDigest(expectedMd5, 16)
+    if (sha != null && sha != digests.sha256Hex) {
+        return ChecksumVerdict.Rejected(
+            DownloadOutcome.Failed(
+                "checksum",
+                "SHA-256 of the file does not match the expected digest.",
+                null,
+                false,
+            ),
+        )
+    }
+    if (md5 != null && md5 != digests.md5Hex) {
+        return ChecksumVerdict.Rejected(
+            DownloadOutcome.Failed(
+                "checksum",
+                "MD5 of the file does not match the expected digest.",
+                null,
+                false,
+            ),
+        )
+    }
+    return ChecksumVerdict.Verified(sha256 = digests.sha256Hex, md5 = digests.md5Hex)
+}
+
+internal fun ByteArray.toHex(): String {
+    val chars = CharArray(size * 2)
+    val alphabet = "0123456789abcdef"
+    for (index in indices) {
+        val value = this[index].toInt() and 0xff
+        chars[index * 2] = alphabet[value ushr 4]
+        chars[index * 2 + 1] = alphabet[value and 0x0f]
+    }
+    return String(chars)
+}
+
+private fun currentPriority(): Int? {
+    return try {
+        Process.getThreadPriority(Process.myTid())
+    } catch (_: Throwable) {
+        null
+    }
+}
+
+private fun setBackgroundPriority() {
+    try {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+    } catch (_: Throwable) {
+        // Hosts without an Android process scheduler still hash the file.
+    }
+}
+
+private fun restorePriority(previous: Int?) {
+    if (previous == null) {
+        return
+    }
+    try {
+        Process.setThreadPriority(previous)
+    } catch (_: Throwable) {
+        // Restoring priority is best-effort on hosts without a process scheduler.
+    }
+}

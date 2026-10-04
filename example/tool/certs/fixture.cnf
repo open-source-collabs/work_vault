@@ -1,0 +1,11 @@
+[req]
+distinguished_name = dn
+x509_extensions = v3
+prompt = no
+[dn]
+CN = work-vault-fixture
+[v3]
+subjectAltName = IP:10.0.2.2,IP:127.0.0.1,DNS:localhost
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
