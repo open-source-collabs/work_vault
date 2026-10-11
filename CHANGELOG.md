@@ -1,3 +1,7 @@
+## 0.2.1
+
+* Add screenshots to the pub.dev listing: how it works, the task lifecycle, and a quickstart.
+
 ## 0.2.0
 
 * Add official support for **Windows**, **Linux**, and **Web**.
