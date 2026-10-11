@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'battery_constraint.dart';
 import 'http_method.dart';
 import 'network_constraint.dart';
@@ -62,7 +64,13 @@ final class WorkTaskConfig {
       throw const InvalidWorkConfig('url must be an absolute https URL.');
     }
 
-    if (!_isAbsolutePath(destinationPath)) {
+    if (kIsWeb) {
+      if (!_isValidWebDestination(destinationPath)) {
+        throw const InvalidWorkConfig(
+          'destinationPath must be a valid destination name without traversal.',
+        );
+      }
+    } else if (!_isAbsolutePath(destinationPath)) {
       throw const InvalidWorkConfig(
         'destinationPath must be an absolute file path.',
       );
@@ -181,6 +189,13 @@ bool _isAbsolutePath(String path) {
   return path.startsWith('/') ||
       path.startsWith(r'\\') ||
       _windowsAbsolute.hasMatch(path);
+}
+
+bool _isValidWebDestination(String path) {
+  if (path.isEmpty || _controlCharacters.hasMatch(path) || path.contains('..')) {
+    return false;
+  }
+  return true;
 }
 
 void _visibleText(String field, String value) {

@@ -4,6 +4,10 @@
 /// through the Pigeon contract in `pigeons/messages.dart`.
 library;
 
+// Flutter's generated plugin registrant imports `WorkVaultLinux` and
+// `WorkVaultWindows` from this library, so they must be exported here.
+export 'src/desktop/desktop_plugins_io.dart'
+    if (dart.library.js_interop) 'src/desktop/desktop_plugins_stub.dart';
 export 'src/isolate/background_entry_point.dart'
     show
         registerWorkVaultBackgroundHandler,
