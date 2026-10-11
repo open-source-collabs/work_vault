@@ -34,6 +34,25 @@ void main() {
   });
 
   test(
+    'a status the host reports while enqueue is in flight is not overwritten',
+    () async {
+      await vault.initialize();
+      engine.duringEnqueue = (WorkTaskConfig config) {
+        engine.observer!.onStatusChanged(
+          sampleSnapshot(taskId: config.taskId, status: TaskStatus.running),
+        );
+      };
+
+      final TaskSnapshot snapshot = await vault.enqueue(sampleConfig());
+
+      expect(snapshot.status, TaskStatus.running);
+      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.running);
+      await vault.pause('job-1');
+      expect(engine.calls, contains('pause:job-1'));
+    },
+  );
+
+  test(
     'applies host events that arrive while initialize is in flight',
     () async {
       engine.rows['job-1'] = sampleSnapshot();

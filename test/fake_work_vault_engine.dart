@@ -15,6 +15,9 @@ final class FakeWorkVaultEngine implements WorkVaultEngine {
   /// Runs inside [initialize], after the call is recorded.
   void Function()? duringInitialize;
 
+  /// Runs inside [enqueue], before it returns, like a host that starts work immediately.
+  void Function(WorkTaskConfig config)? duringEnqueue;
+
   @override
   Future<void> initialize() async {
     calls.add('initialize');
@@ -35,6 +38,7 @@ final class FakeWorkVaultEngine implements WorkVaultEngine {
       status: TaskStatus.enqueued,
     );
     rows[config.taskId] = snapshot;
+    duringEnqueue?.call(config);
     return Future<TaskSnapshot>.value(snapshot);
   }
 

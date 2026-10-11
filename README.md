@@ -10,6 +10,7 @@ iOS downloads run in a background `URLSession` and survive process termination. 
 - **Flutter**: 3.47 or newer
 - **Android**: 8.0 (API 26)+ via WorkManager
 - **iOS**: 15+ via Background `URLSession`
+- **macOS**: Desktop engine with resumable streaming and SQLite persistence (`package:sqlite3`). Runs while the app is open. See [macOS](#macos)
 - **Windows**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
 - **Linux**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
 - **Web**: In-browser Fetch & Streams API with web database persistence and browser save triggers
@@ -102,6 +103,19 @@ WorkVaultBackgroundEvents.handleEvents(
 ```
 
 `any` allows every network. `unmetered` waits for a non-cellular, non-expensive path. `notRoaming` allows cellular and refuses expensive paths, which is how iOS represents roaming. A task that requires external power or a non-low battery stays enqueued until the maintenance task, or the next `initialize`, sees that condition.
+
+## macOS
+
+macOS uses the same desktop engine as Windows and Linux: a resumable HTTPS `GET` streamed with `Range` requests, with task state in SQLite. The transfer runs while the app is running. Unlike Android and iOS, there is no system service that continues a download after the app quits.
+
+A sandboxed macOS app needs permission to make network requests, or every download fails with `Operation not permitted`. Add this to `macos/Runner/DebugProfile.entitlements` and `macos/Runner/Release.entitlements`:
+
+```xml
+<key>com.apple.security.network.client</key>
+<true/>
+```
+
+A destination path must be somewhere the sandbox lets the app write, for example the app's container or a folder the user picked.
 
 ## Running the tests
 

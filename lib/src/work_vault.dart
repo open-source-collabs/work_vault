@@ -81,7 +81,11 @@ final class WorkVault {
         'Host returned task "${snapshot.taskId}" for "${config.taskId}".',
       );
     }
-    _publishStatus(snapshot);
+    // A host that starts work at once can report a newer status before this call returns. The
+    // snapshot it returns is older then, and must not replace what the events already said.
+    if (!_cache.containsKey(snapshot.taskId)) {
+      _publishStatus(snapshot);
+    }
     return _cache[snapshot.taskId] ?? snapshot;
   }
 

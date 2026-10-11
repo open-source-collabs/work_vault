@@ -1,3 +1,9 @@
+## 0.3.0
+
+* Add macOS support. It uses the desktop engine, which already selected itself on macOS but was never declared or tested. The README documents the `com.apple.security.network.client` entitlement a sandboxed app needs.
+* Fix `WorkVault.enqueue` overwriting a newer status. A host that starts work immediately, such as the desktop engine, reports `running` before `enqueue` returns its `enqueued` snapshot, and the vault then showed `enqueued` while bytes were flowing, so `pause` was rejected as an illegal transition.
+* The example app builds and runs on macOS, and its end-to-end test uses a unique task id per run, because the desktop task store persists between runs.
+
 ## 0.2.1
 
 * Add screenshots to the pub.dev listing: how it works, the task lifecycle, and a quickstart.

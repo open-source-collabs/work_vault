@@ -54,14 +54,20 @@ void main() {
     }
   });
 
+  // The task store persists between runs on desktop, and a task id is its identity, so a
+  // fixed id would collide with the task a previous run left behind.
+  final runId = DateTime.now().microsecondsSinceEpoch;
+  final referenceId = 'fixture-reference-$runId';
+  final resumedId = 'fixture-resumed-$runId';
+
   testWidgets('a paused and resumed GET matches the reference digest', (
     WidgetTester tester,
   ) async {
     final File reference = File('${workspace.path}/reference.bin');
     final File resumed = File('${workspace.path}/resumed.bin');
 
-    await _enqueue(taskId: 'fixture-reference', file: reference);
-    await _awaitStatus('fixture-reference', TaskStatus.completed);
+    await _enqueue(taskId: referenceId, file: reference);
+    await _awaitStatus(referenceId, TaskStatus.completed);
     final String? referenceDigest = await sha256HexOfFile(reference.path);
     expect(referenceDigest, isNotNull, reason: 'the reference file is missing');
     if (_fixtureSha256.isNotEmpty) {
@@ -70,13 +76,13 @@ void main() {
     final int size = reference.lengthSync();
     expect(size, greaterThan(0));
 
-    await _enqueue(taskId: 'fixture-resumed', file: resumed);
-    final int pausedAt = await _awaitPartialBytes('fixture-resumed');
+    await _enqueue(taskId: resumedId, file: resumed);
+    final int pausedAt = await _awaitPartialBytes(resumedId);
     expect(pausedAt, greaterThan(0));
     expect(pausedAt, lessThan(size));
 
-    await WorkVault.instance.pause('fixture-resumed');
-    await _awaitStatus('fixture-resumed', TaskStatus.paused);
+    await WorkVault.instance.pause(resumedId);
+    await _awaitStatus(resumedId, TaskStatus.paused);
     if (Platform.isAndroid) {
       // Android appends to the destination file, so the paused bytes are on disk.
       final int settled = resumed.existsSync() ? resumed.lengthSync() : 0;
@@ -86,7 +92,7 @@ void main() {
       // iOS keeps paused bytes as URLSession resume data until the download
       // finishes, so the host's byte count is what shows they were retained.
       final TaskSnapshot? paused = await WorkVault.instance.getTask(
-        'fixture-resumed',
+        resumedId,
       );
       expect(
         paused?.progress?.bytesDownloaded ?? 0,
@@ -95,8 +101,8 @@ void main() {
       );
     }
 
-    await WorkVault.instance.resume('fixture-resumed');
-    await _awaitStatus('fixture-resumed', TaskStatus.completed);
+    await WorkVault.instance.resume(resumedId);
+    await _awaitStatus(resumedId, TaskStatus.completed);
 
     expect(resumed.lengthSync(), size);
     expect(await sha256HexOfFile(resumed.path), referenceDigest);

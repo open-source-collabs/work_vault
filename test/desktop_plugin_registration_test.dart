@@ -7,5 +7,6 @@ void main() {
   test('the desktop plugin classes are exported from the main library', () {
     expect(WorkVaultLinux.registerWith, isA<void Function()>());
     expect(WorkVaultWindows.registerWith, isA<void Function()>());
+    expect(WorkVaultMacOS.registerWith, isA<void Function()>());
   });
 }
