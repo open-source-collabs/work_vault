@@ -1,5 +1,6 @@
 ## Unreleased
 
+* Add iOS tests for retry exhaustion, cancel cleanup, battery gating, and the network-constraint mapping. The mapping is now a single function that the background session configuration uses.
 * Fix the iOS plugin not compiling: `WorkVaultSessionManager.read` now rethrows, so a lookup of an unknown task reports `task_not_found` instead of failing the build.
 * Document how to run the Dart, Android, and iOS test suites.
 * Add Android tests that pin entity-tag restart, redirect limits, cleartext refusal, timeouts, and retryable HTTP statuses.

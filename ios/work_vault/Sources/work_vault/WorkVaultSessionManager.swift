@@ -568,20 +568,19 @@ extension WorkVaultSessionManager {
     configuration.shouldUseExtendedBackgroundIdleMode = true
     configuration.timeoutIntervalForRequest = 60
     configuration.timeoutIntervalForResource = 60 * 60 * 24
+    let constraint: NetworkConstraint
     switch identifier {
     case WorkVaultRules.sessionIdentifier(for: .unmetered):
-      configuration.allowsCellularAccess = false
-      configuration.allowsExpensiveNetworkAccess = false
-      configuration.allowsConstrainedNetworkAccess = true
+      constraint = .unmetered
     case WorkVaultRules.sessionIdentifier(for: .notRoaming):
-      configuration.allowsCellularAccess = true
-      configuration.allowsExpensiveNetworkAccess = false
-      configuration.allowsConstrainedNetworkAccess = true
+      constraint = .notRoaming
     default:
-      configuration.allowsCellularAccess = true
-      configuration.allowsExpensiveNetworkAccess = true
-      configuration.allowsConstrainedNetworkAccess = true
+      constraint = .any
     }
+    let access = WorkVaultRules.networkAccess(for: constraint)
+    configuration.allowsCellularAccess = access.allowsCellular
+    configuration.allowsExpensiveNetworkAccess = access.allowsExpensive
+    configuration.allowsConstrainedNetworkAccess = true
     return URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
   }
 
@@ -1073,6 +1072,23 @@ enum WorkVaultRules {
     status == TaskStatus.enqueued.wire
       || status == TaskStatus.running.wire
       || status == TaskStatus.paused.wire
+  }
+
+  /// Which paths a session for [network] may use.
+  ///
+  /// iOS has no roaming signal. `notRoaming` allows cellular and refuses expensive paths,
+  /// which is how the system represents roaming and tethering.
+  static func networkAccess(
+    for network: NetworkConstraint
+  ) -> (allowsCellular: Bool, allowsExpensive: Bool) {
+    switch network {
+    case .any:
+      return (true, true)
+    case .unmetered:
+      return (false, false)
+    case .notRoaming:
+      return (true, false)
+    }
   }
 
   static func sessionIdentifier(for network: NetworkConstraint) -> String {
