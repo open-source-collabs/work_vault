@@ -1,5 +1,6 @@
 ## Unreleased
 
+* Record a schema version in the shared SQLite file. A file written by 0.1.0 keeps its rows, and a file from a newer version is refused with a `StateError` instead of being misread.
 * Fix the headless background engine reusing the first database it opened. Each dispatched event is now written to the database its payload names.
 * Remove the Android TUS upload handler. Version 1 runs resumable HTTPS GET only, so native routing and validation now reject every other method, with or without upload protocol headers.
 * Fix Android so an expected digest passed in `X-Work-Vault-Sha256` or `X-Work-Vault-Md5` is no longer replaced by the server's `Digest` or `Content-MD5` response header. A server digest is used only when none was supplied.
