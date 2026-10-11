@@ -933,10 +933,10 @@ extension WorkVaultSessionManager {
     try? data.write(to: storeURL, options: .atomic)
   }
 
-  fileprivate func read<T>(_ body: () -> T) -> T {
+  fileprivate func read<T>(_ body: () throws -> T) rethrows -> T {
     lock.lock()
     defer { lock.unlock() }
-    return body()
+    return try body()
   }
 
   fileprivate func mutate<T>(_ body: () throws -> T) rethrows -> T {

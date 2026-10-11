@@ -1,5 +1,7 @@
 ## Unreleased
 
+* Fix the iOS plugin not compiling: `WorkVaultSessionManager.read` now rethrows, so a lookup of an unknown task reports `task_not_found` instead of failing the build.
+* Document how to run the Dart, Android, and iOS test suites.
 * Add Android tests that pin entity-tag restart, redirect limits, cleartext refusal, timeouts, and retryable HTTP statuses.
 * Record a schema version in the shared SQLite file. A file written by 0.1.0 keeps its rows, and a file from a newer version is refused with a `StateError` instead of being misread.
 * Fix the headless background engine reusing the first database it opened. Each dispatched event is now written to the database its payload names.

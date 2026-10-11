@@ -100,6 +100,17 @@ WorkVaultBackgroundEvents.handleEvents(
 
 `any` allows every network. `unmetered` waits for a non-cellular, non-expensive path. `notRoaming` allows cellular and refuses expensive paths, which is how iOS represents roaming. A task that requires external power or a non-low battery stays enqueued until the maintenance task, or the next `initialize`, sees that condition.
 
+## Running the tests
+
+```sh
+flutter test                                    # Dart
+cd example/android && ./gradlew :work_vault:testDebugUnitTest   # Android
+cd example/ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:RunnerTests   # iOS
+```
+
+Build the example once first (`flutter build apk --debug` and `flutter build ios --simulator --no-codesign` from `example/`) so the Gradle wrapper and Flutter's generated iOS packages exist. The iOS tests drive `WorkVaultSessionManager` with background sessions turned off, so they run without a network.
+
 ## Background callbacks
 
 Register a top-level function before the UI engine can be destroyed. The same function runs inside the headless engine, looked up by callback handle rather than a named port:
