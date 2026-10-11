@@ -23,8 +23,6 @@ internal data class TaskRecord(
     val expectedMd5: String? = null,
     val sha256: String? = null,
     val md5: String? = null,
-    val tusLocation: String? = null,
-    val uploadOffset: Long = 0L,
 )
 
 internal fun TaskRecord.toProgress(): TaskProgress = TaskProgress(
@@ -296,8 +294,6 @@ private fun encode(record: TaskRecord): JSONObject {
     root.putNullable("expectedMd5", record.expectedMd5)
     root.putNullable("sha256", record.sha256)
     root.putNullable("md5", record.md5)
-    root.putNullable("tusLocation", record.tusLocation)
-    root.put("uploadOffset", record.uploadOffset)
     if (record.totalBytes == null) {
         root.put("totalBytes", JSONObject.NULL)
     } else {
@@ -392,8 +388,6 @@ private fun decode(json: JSONObject): TaskRecord? {
         expectedMd5 = json.nullableString("expectedMd5"),
         sha256 = json.nullableString("sha256"),
         md5 = json.nullableString("md5"),
-        tusLocation = json.nullableString("tusLocation"),
-        uploadOffset = json.optLong("uploadOffset"),
     )
 }
 

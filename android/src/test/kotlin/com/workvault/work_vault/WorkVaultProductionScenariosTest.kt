@@ -303,7 +303,8 @@ internal class WorkVaultProductionScenariosTest {
             "Only GET downloads are supported in this version.",
             validateConfig(scenarioConfig(method = HttpMethod.POST)),
         )
-        assertNull(
+        assertEquals(
+            "Only GET downloads are supported in this version.",
             validateConfig(
                 scenarioConfig(
                     method = HttpMethod.POST,
@@ -363,17 +364,7 @@ internal class WorkVaultProductionScenariosTest {
     }
 
     @Test
-    fun tusMetadataAndChecksumFraming() {
-        assertEquals("report.bin", parseTusMetadata(encodeTusMetadata(mapOf("filename" to "report.bin")))["filename"])
-        assertEquals("", parseTusMetadata("filename !!!")["filename"])
-        assertEquals("", parseTusMetadata("bare")["bare"])
-        assertEquals(setOf("creation", "checksum"), parseListHeader("Creation, checksum"))
-        assertEquals(emptySet(), parseListHeader(null))
-        assertEquals(emptySet(), parseListHeader(" , "))
-        assertEquals(0L, parseUploadOffset("0"))
-        assertEquals(128L, parseUploadOffset(" 128 "))
-        assertNull(parseUploadOffset("-1"))
-        assertNull(parseUploadOffset("nope"))
+    fun digestHeaderParsingRejectsMalformedValues() {
         assertNull(sha256HexFromDigestHeader(null))
         assertNull(sha256HexFromDigestHeader("md5=:abc=:"))
         assertNull(md5HexFromContentMd5("%%%"))

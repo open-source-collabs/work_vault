@@ -118,8 +118,6 @@ internal class WorkVaultDownloader(
                 WorkVaultBudget.shouldYield(context, sessionStartMs)
         }
         return when (transferKind(record.config)) {
-            TransferKind.TUS_UPLOAD -> TusProtocolHandler(workerStopped, onProgress, quotaYield)
-                .upload(record, foreground, sessionStartMs)
             TransferKind.RESUMABLE_GET -> ResumableEngine(workerStopped, onProgress, quotaYield)
                 .download(record, foreground, sessionStartMs)
             TransferKind.UNSUPPORTED -> DownloadOutcome.Failed(

@@ -1,5 +1,6 @@
 ## Unreleased
 
+* Remove the Android TUS upload handler. Version 1 runs resumable HTTPS GET only, so native routing and validation now reject every other method, with or without upload protocol headers.
 * Fix Android so an expected digest passed in `X-Work-Vault-Sha256` or `X-Work-Vault-Md5` is no longer replaced by the server's `Digest` or `Content-MD5` response header. A server digest is used only when none was supplied.
 * Document expected-digest verification, including that iOS does not read these headers yet.
 * Lower the Dart SDK constraint to `^3.13.0` so it matches the documented minimum of Dart 3.13 and Flutter 3.47. The previous `^3.13.4` required Flutter 3.47.7.
