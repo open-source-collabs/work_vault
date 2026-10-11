@@ -1,5 +1,10 @@
-## Unreleased
+## 0.2.0
 
+* Add official support for **Windows**, **Linux**, and **Web**.
+* Add `DesktopWorkVaultEngine` (`dartPluginClass`) for Windows and Linux with resumable HTTP GET streaming via `Range: bytes=X-` headers, SHA-256 integrity verification, and SQLite database persistence.
+* Add `WebWorkVaultEngine` (`flutter_web_plugins`) for Web with Fetch/Streams API chunk streaming, progress observation, web database persistence, SHA-256 checks, and automatic browser file download triggers.
+* Implement web-safe abstractions and conditional imports across storage and file hashing layers to prevent `dart:io` compilation errors on Web.
+* Scaffold native runners for Windows, Linux, and Web in the `example/` application with dynamic cross-platform destination paths.
 * Fix every Flutter app build failing in the generated plugin registrant: `WorkVaultLinux` and `WorkVaultWindows` are now exported from `package:work_vault/work_vault.dart`, which is where the registrant imports them from. The export is skipped on web.
 * Carry the schema version and close-on-error handling into the IO database implementation introduced for desktop support.
 * Add iOS tests for retry exhaustion, cancel cleanup, battery gating, and the network-constraint mapping. The cellular and expensive-path settings now come from one function that the background session configuration uses.
@@ -12,14 +17,6 @@
 * Fix Android so an expected digest passed in `X-Work-Vault-Sha256` or `X-Work-Vault-Md5` is no longer replaced by the server's `Digest` or `Content-MD5` response header. A server digest is used only when none was supplied, including when a stored task is resumed.
 * Document expected-digest verification, including that iOS does not read these headers yet.
 * Lower the Dart SDK constraint to `^3.13.0` so it matches the documented minimum of Dart 3.13 and Flutter 3.47. The previous `^3.13.4` required Flutter 3.47.7.
-
-## 0.2.0
-
-* Add official support for **Windows**, **Linux**, and **Web**.
-* Add `DesktopWorkVaultEngine` (`dartPluginClass`) for Windows and Linux with resumable HTTP GET streaming via `Range: bytes=X-` headers, SHA-256 integrity verification, and SQLite database persistence.
-* Add `WebWorkVaultEngine` (`flutter_web_plugins`) for Web with Fetch/Streams API chunk streaming, progress observation, web database persistence, SHA-256 checks, and automatic browser file download triggers.
-* Implement web-safe abstractions and conditional imports across storage and file hashing layers to prevent `dart:io` compilation errors on Web.
-* Scaffold native runners for Windows, Linux, and Web in the `example/` application with dynamic cross-platform destination paths.
 
 ## 0.1.0
 
