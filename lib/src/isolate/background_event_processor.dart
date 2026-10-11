@@ -1,8 +1,8 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' show CallbackHandle, PluginUtilities;
 
-import 'package:crypto/crypto.dart';
+import '../utils/file_hasher.dart';
+export '../utils/file_hasher.dart' show sha256HexOfFile;
 
 import '../persistence/work_vault_database.dart';
 
@@ -188,12 +188,3 @@ Future<_Verification> _verify(
   return (status: Sha256VerificationStatus.verified, sha256: digest);
 }
 
-/// Streams [path] through SHA-256 and returns a lowercase hex digest.
-Future<String?> sha256HexOfFile(String path) async {
-  final File file = File(path);
-  if (!file.existsSync()) {
-    return null;
-  }
-  final Digest digest = await sha256.bind(file.openRead()).first;
-  return digest.toString();
-}

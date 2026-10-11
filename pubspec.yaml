@@ -1,6 +1,6 @@
 name: work_vault
-description: "Resumable HTTPS GET downloads for Flutter. Work continues in WorkManager on Android and a background URLSession on iOS."
-version: 0.1.0
+description: "Resumable HTTPS GET downloads for Flutter across Android, iOS, Windows, Linux, and Web."
+version: 0.2.0
 homepage: https://pub.dev/packages/work_vault
 topics:
   - http
@@ -15,7 +15,11 @@ dependencies:
   crypto: ^3.0.7
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  path: ^1.9.0
   sqlite3: ^3.7.0
+  web: '>=0.5.1 <2.0.0'
 
 dev_dependencies:
   flutter_test:
@@ -31,3 +35,10 @@ flutter:
         pluginClass: WorkVaultPlugin
       ios:
         pluginClass: WorkVaultPlugin
+      windows:
+        dartPluginClass: WorkVaultWindows
+      linux:
+        dartPluginClass: WorkVaultLinux
+      web:
+        pluginClass: WorkVaultWeb
+        fileName: src/web/work_vault_web.dart

@@ -4,12 +4,15 @@ Type-safe background downloads for Flutter. Dart schedules, pauses, resumes, can
 
 iOS downloads run in a background `URLSession` and survive process termination. Android downloads run in WorkManager. When the UI engine is gone, the host starts a headless `FlutterEngine` at `workVaultBackgroundMain` and delivers events on a platform channel. Task rows, resume tokens, and SHA-256 status live in a SQLite file both isolates open. There is no `IsolateNameServer`.
 
-## Requirements
+## Platforms & Requirements
 
-- Dart 3.13 or newer
-- Flutter 3.47 or newer
-- Android 8.0 (API 26)
-- iOS 15
+- **Dart**: 3.13 or newer
+- **Flutter**: 3.47 or newer
+- **Android**: 8.0 (API 26)+ via WorkManager
+- **iOS**: 15+ via Background `URLSession`
+- **Windows**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
+- **Linux**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
+- **Web**: In-browser Fetch & Streams API with web database persistence and browser save triggers
 
 ## Usage
 

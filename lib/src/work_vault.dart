@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'engine/pigeon_work_vault_engine.dart';
+import 'engine/engine_factory.dart';
 import 'engine/work_vault_engine.dart';
 import 'isolate/background_entry_point.dart';
 import 'isolate/background_event_processor.dart';
@@ -22,7 +22,7 @@ final class WorkVault {
   WorkVault._(this._engine);
 
   /// Vault bound to the platform engine.
-  static final WorkVault instance = WorkVault._(PigeonWorkVaultEngine());
+  static final WorkVault instance = WorkVault._(createPlatformWorkVaultEngine());
 
   /// Remembers [handler] for a headless engine started after this UI engine is gone.
   ///
