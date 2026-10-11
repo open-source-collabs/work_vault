@@ -49,8 +49,8 @@ internal class ResumableEngine(
         var rangeHonored = record.acceptsRanges != false
         var reportedRanges: Boolean? = record.acceptsRanges
         var etag = record.etag
-        var responseSha = record.expectedSha256 ?: expectedSha
-        var responseMd5 = record.expectedMd5 ?: expectedMd5
+        var responseSha = resolveExpectedDigest(expectedSha, null, record.expectedSha256)
+        var responseMd5 = resolveExpectedDigest(expectedMd5, null, record.expectedMd5)
         val runStarted = SystemClock.elapsedRealtime()
         var lastTick = runStarted
         var lastBytes = offset

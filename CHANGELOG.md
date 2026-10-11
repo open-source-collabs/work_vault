@@ -1,13 +1,13 @@
 ## Unreleased
 
-* Add iOS tests for retry exhaustion, cancel cleanup, battery gating, and the network-constraint mapping. The mapping is now a single function that the background session configuration uses.
+* Add iOS tests for retry exhaustion, cancel cleanup, battery gating, and the network-constraint mapping. The cellular and expensive-path settings now come from one function that the background session configuration uses.
 * Fix the iOS plugin not compiling: `WorkVaultSessionManager.read` now rethrows, so a lookup of an unknown task reports `task_not_found` instead of failing the build.
 * Document how to run the Dart, Android, and iOS test suites.
 * Add Android tests that pin entity-tag restart, redirect limits, cleartext refusal, timeouts, and retryable HTTP statuses.
 * Record a schema version in the shared SQLite file. A file written by 0.1.0 keeps its rows, and a file from a newer version is refused with a `StateError` instead of being misread.
 * Fix the headless background engine reusing the first database it opened. Each dispatched event is now written to the database its payload names.
 * Remove the Android TUS upload handler. Version 1 runs resumable HTTPS GET only, so native routing and validation now reject every other method, with or without upload protocol headers.
-* Fix Android so an expected digest passed in `X-Work-Vault-Sha256` or `X-Work-Vault-Md5` is no longer replaced by the server's `Digest` or `Content-MD5` response header. A server digest is used only when none was supplied.
+* Fix Android so an expected digest passed in `X-Work-Vault-Sha256` or `X-Work-Vault-Md5` is no longer replaced by the server's `Digest` or `Content-MD5` response header. A server digest is used only when none was supplied, including when a stored task is resumed.
 * Document expected-digest verification, including that iOS does not read these headers yet.
 * Lower the Dart SDK constraint to `^3.13.0` so it matches the documented minimum of Dart 3.13 and Flutter 3.47. The previous `^3.13.4` required Flutter 3.47.7.
 

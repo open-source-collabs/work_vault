@@ -39,11 +39,13 @@ WorkVault.instance.watchProgress(snapshot.taskId).listen((TaskProgress progress)
 
 ## Version 1 contract
 
-One behavior ships: a resumable HTTPS `GET`, the same on Android and iOS. The stored verb is the only routing gate, so a `GET` is never handed to the TUS upload handler and a verb the download engine cannot resume is never started.
+One behavior ships: a resumable HTTPS `GET`, the same on Android and iOS. The stored verb is the only routing gate, so a verb the download engine cannot resume is never started.
 
 The host store owns `status`, the byte count, the entity tag, and the resume position those two describe. SQLite is the projection the headless callback reads, not a second source of truth: every host event carries the same snapshot the UI isolate would have received, and a field the host does not know clears the stored one. `initialize` reads the host, so a row left behind by an earlier run never seeds the vault.
 
 Checksums follow the same split. The native verifier hashes a finished file and decides `completed` or `failed`. Hashing in Dart only records `verified`, `mismatch`, or `missing` against the digest already on record; it never moves a task to another status.
+
+Call `initialize` before enqueueing. It loads tasks that finished while the app was gone. Host progress and status events are delivered only while an engine is attached.
 
 ### Expected digests (Android)
 
@@ -67,8 +69,6 @@ WorkTaskConfig(
 - A completed file that is missing or unreadable at that point fails with the code `io` and is retryable.
 
 iOS does not read these headers yet, so a task there is never checked against an expected digest. Dart still records `verified`, `mismatch`, or `missing` for a completed file on both platforms, as described above.
-
-Call `initialize` before enqueueing. It loads tasks that finished while the app was gone. Host progress and status events are delivered only while an engine is attached.
 
 ## iOS
 
@@ -106,7 +106,7 @@ WorkVaultBackgroundEvents.handleEvents(
 flutter test                                    # Dart
 cd example/android && ./gradlew :work_vault:testDebugUnitTest   # Android
 cd example/ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:RunnerTests   # iOS
+  -destination 'platform=iOS Simulator,name=<a simulator you have>' -only-testing:RunnerTests   # iOS
 ```
 
 Build the example once first (`flutter build apk --debug` and `flutter build ios --simulator --no-codesign` from `example/`) so the Gradle wrapper and Flutter's generated iOS packages exist. The iOS tests drive `WorkVaultSessionManager` with background sessions turned off, so they run without a network.

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:work_vault/work_vault.dart';
 
 void main() {
@@ -63,20 +64,34 @@ void main() {
       };
     }
 
-    Future<void> send(
+    Future<ByteData?> send(
       WidgetTester tester,
       String method, [
       Object? arguments,
     ]) async {
       const MethodChannel channel = MethodChannel(workVaultBackgroundChannel);
-      await tester.runAsync(() async {
-        final Completer<void> done = Completer<void>();
+      final ByteData? reply = await tester.runAsync<ByteData?>(() async {
+        final Completer<ByteData?> done = Completer<ByteData?>();
         await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
           channel.name,
           channel.codec.encodeMethodCall(MethodCall(method, arguments)),
-          (ByteData? reply) => done.complete(),
+          done.complete,
         );
-        await done.future;
+        return done.future;
+      });
+      return reply;
+    }
+
+    void mockHost(WidgetTester tester) {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel(workVaultBackgroundChannel),
+        (MethodCall call) async => null,
+      );
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          const MethodChannel(workVaultBackgroundChannel),
+          null,
+        );
       });
     }
 
@@ -107,6 +122,50 @@ void main() {
       addTearDown(secondDb.close);
       expect(firstDb.getTasks().map((r) => r.taskId), <String>['job-a']);
       expect(secondDb.getTasks().map((r) => r.taskId), <String>['job-b']);
+    });
+
+    testWidgets('events for one path share a database and survive a shutdown', (
+      WidgetTester tester,
+    ) async {
+      mockHost(tester);
+      final String path = '${directory.path}/shared.db';
+
+      workVaultBackgroundMain();
+      await send(tester, 'dispatch', payload(path, 'job-a'));
+      await send(tester, 'dispatch', payload(path, 'job-b'));
+      await send(tester, 'shutdown');
+      await send(tester, 'dispatch', payload(path, 'job-c'));
+
+      final WorkVaultDatabase database = WorkVaultDatabase.openFile(path);
+      addTearDown(database.close);
+      expect(database.getTasks().map((r) => r.taskId), <String>[
+        'job-a',
+        'job-b',
+        'job-c',
+      ]);
+    });
+
+    testWidgets('a database written by a newer version is refused', (
+      WidgetTester tester,
+    ) async {
+      mockHost(tester);
+      final String path = '${directory.path}/newer.db';
+      sqlite3.open(path)
+        ..execute('PRAGMA user_version = 2')
+        ..close();
+      const MethodChannel channel = MethodChannel(workVaultBackgroundChannel);
+
+      workVaultBackgroundMain();
+      final ByteData? reply = await send(
+        tester,
+        'dispatch',
+        payload(path, 'job-a'),
+      );
+
+      expect(
+        () => channel.codec.decodeEnvelope(reply!),
+        throwsA(isA<PlatformException>()),
+      );
     });
   });
 }

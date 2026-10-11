@@ -1,7 +1,6 @@
 package com.workvault.work_vault
 
 import java.net.HttpURLConnection
-import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLConnection
 import java.net.URLStreamHandler
@@ -23,24 +22,49 @@ internal class WorkVaultResumeAndRedirectTest {
     fun aChangedEntityTagRestartsInsteadOfStitchingTwoFiles() {
         assertEquals(
             PartialBodyPlan.RESTART,
-            planPartialBody(206, 100L, true, match, "\"v1\"", "\"v2\""),
+            plan(status = 206, offset = 100L, range = match, previous = "\"v1\"", response = "\"v2\""),
         )
         assertEquals(
             PartialBodyPlan.RESTART,
-            planPartialBody(200, 0L, false, null, "\"v1\"", "\"v2\""),
+            plan(status = 200, offset = 0L, sentRange = false, previous = "\"v1\"", response = "\"v2\""),
         )
         assertEquals(
             PartialBodyPlan.RESTART,
-            planPartialBody(416, 100L, true, null, "\"v1\"", "\"v2\""),
+            plan(status = 416, offset = 100L, previous = "\"v1\"", response = "\"v2\""),
         )
     }
 
     @Test
     fun anUnchangedOrUnknownEntityTagKeepsTheResumeDecisionToTheStatus() {
-        assertEquals(PartialBodyPlan.APPEND, planPartialBody(206, 100L, true, match, "\"v1\"", "W/\"v1\""))
-        assertEquals(PartialBodyPlan.APPEND, planPartialBody(206, 100L, true, match, null, "\"v2\""))
-        assertEquals(PartialBodyPlan.APPEND, planPartialBody(206, 100L, true, match, "\"v1\"", null))
+        assertEquals(
+            PartialBodyPlan.APPEND,
+            plan(status = 206, offset = 100L, range = match, previous = "\"v1\"", response = "W/\"v1\""),
+        )
+        assertEquals(
+            PartialBodyPlan.APPEND,
+            plan(status = 206, offset = 100L, range = match, previous = null, response = "\"v2\""),
+        )
+        assertEquals(
+            PartialBodyPlan.APPEND,
+            plan(status = 206, offset = 100L, range = match, previous = "\"v1\"", response = null),
+        )
     }
+
+    private fun plan(
+        status: Int,
+        offset: Long,
+        sentRange: Boolean = true,
+        range: ContentRange? = null,
+        previous: String?,
+        response: String?,
+    ): PartialBodyPlan = planPartialBody(
+        status = status,
+        requestedOffset = offset,
+        sentRange = sentRange,
+        contentRange = range,
+        previousEtag = previous,
+        responseEtag = response,
+    )
 
     @Test
     fun aRedirectChainUpToTheLimitIsFollowed() {
@@ -117,7 +141,7 @@ internal class WorkVaultResumeAndRedirectTest {
 
     @Test
     fun aStallBeforeAnyByteIsARetryableFailure() {
-        val outcome = recoverFromConnectionLoss(0L, null, SocketTimeoutException("Read timed out").message)
+        val outcome = recoverFromConnectionLoss(0L, null, "Read timed out")
 
         val failed = outcome as DownloadOutcome.Failed
         assertEquals("io", failed.code)
