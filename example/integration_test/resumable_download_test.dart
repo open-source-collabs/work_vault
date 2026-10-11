@@ -77,9 +77,23 @@ void main() {
 
     await WorkVault.instance.pause('fixture-resumed');
     await _awaitStatus('fixture-resumed', TaskStatus.paused);
-    final int settled = resumed.existsSync() ? resumed.lengthSync() : 0;
-    expect(settled, greaterThan(0), reason: 'the paused bytes were discarded');
-    expect(settled, lessThanOrEqualTo(size));
+    if (Platform.isAndroid) {
+      // Android appends to the destination file, so the paused bytes are on disk.
+      final int settled = resumed.existsSync() ? resumed.lengthSync() : 0;
+      expect(settled, greaterThan(0), reason: 'the paused bytes were discarded');
+      expect(settled, lessThanOrEqualTo(size));
+    } else {
+      // iOS keeps paused bytes as URLSession resume data until the download
+      // finishes, so the host's byte count is what shows they were retained.
+      final TaskSnapshot? paused = await WorkVault.instance.getTask(
+        'fixture-resumed',
+      );
+      expect(
+        paused?.progress?.bytesDownloaded ?? 0,
+        greaterThan(0),
+        reason: 'the paused bytes were discarded',
+      );
+    }
 
     await WorkVault.instance.resume('fixture-resumed');
     await _awaitStatus('fixture-resumed', TaskStatus.completed);
