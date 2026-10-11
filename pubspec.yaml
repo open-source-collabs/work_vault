@@ -8,6 +8,14 @@ topics:
   - network
   - files
 
+screenshots:
+  - description: 'How work_vault works: a typed Dart control plane over WorkManager, background URLSession, desktop streaming and web, sharing one SQLite file.'
+    path: screenshots/how-it-works.png
+  - description: 'The six task statuses and the legal pause, resume and cancel transitions.'
+    path: screenshots/lifecycle.png
+  - description: 'Quickstart: initialize, enqueue a resumable download, and watch its progress.'
+    path: screenshots/quickstart.png
+
 false_secrets:
   - example/tool/certs/key.pem
 
