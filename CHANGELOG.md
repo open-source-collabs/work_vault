@@ -1,3 +1,7 @@
+## Unreleased
+
+* Lower the Dart SDK constraint to `^3.13.0` so it matches the documented minimum of Dart 3.13 and Flutter 3.47. The previous `^3.13.4` required Flutter 3.47.7.
+
 ## 0.1.0
 
 * Support one transfer: a resumable HTTPS GET. Android runs it in WorkManager. iOS runs it in a background URLSession. Any other method is rejected.
