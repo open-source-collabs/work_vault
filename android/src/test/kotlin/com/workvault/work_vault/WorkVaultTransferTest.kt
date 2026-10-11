@@ -111,6 +111,23 @@ internal class WorkVaultTransferTest {
     }
 
     @Test
+    fun aDigestTheCallerSuppliedIsNotReplacedByTheServer() {
+        val supplied = "ab".repeat(32)
+        val fromServer = "cd".repeat(32)
+        assertEquals(supplied, resolveExpectedDigest(supplied, fromServer, null))
+        assertEquals(supplied, resolveExpectedDigest(supplied, null, fromServer))
+    }
+
+    @Test
+    fun aServerDigestIsUsedOnlyWhenTheCallerSuppliedNone() {
+        val fromServer = "cd".repeat(32)
+        val earlier = "ef".repeat(32)
+        assertEquals(fromServer, resolveExpectedDigest(null, fromServer, earlier))
+        assertEquals(earlier, resolveExpectedDigest(null, null, earlier))
+        assertNull(resolveExpectedDigest(null, null, null))
+    }
+
+    @Test
     fun localChecksumHeadersStayOffTheWire() {
         val wire = wireHeaders(
             mapOf(

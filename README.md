@@ -45,6 +45,29 @@ The host store owns `status`, the byte count, the entity tag, and the resume pos
 
 Checksums follow the same split. The native verifier hashes a finished file and decides `completed` or `failed`. Hashing in Dart only records `verified`, `mismatch`, or `missing` against the digest already on record; it never moves a task to another status.
 
+### Expected digests (Android)
+
+To have the native verifier check a download against a known digest, put it in the task headers:
+
+```dart
+WorkTaskConfig(
+  taskId: 'archive-1',
+  url: 'https://cdn.example.com/archive.bin',
+  destinationPath: '/data/user/0/archive.bin',
+  headers: {'X-Work-Vault-Sha256': '<64 hex characters>'},
+  notification: notification,
+);
+```
+
+- `X-Work-Vault-Sha256` takes a SHA-256 digest and `X-Work-Vault-Md5` takes an MD5 digest, as hex. Case and surrounding whitespace are ignored.
+- Both headers are local. They are removed before the request is sent and never reach the server.
+- If the server answers with a `Digest` header carrying a SHA-256 and no expected digest was supplied, that value is used.
+- A value that is not valid hex of the right length fails the task before any bytes are fetched.
+- The file is hashed before the task becomes `completed`. A digest that does not match ends the task as `failed` with the failure code `checksum`, and it is not retried.
+- A completed file that is missing or unreadable at that point fails with the code `io` and is retryable.
+
+iOS does not read these headers yet, so a task there is never checked against an expected digest. Dart still records `verified`, `mismatch`, or `missing` for a completed file on both platforms, as described above.
+
 Call `initialize` before enqueueing. It loads tasks that finished while the app was gone. Host progress and status events are delivered only while an engine is attached.
 
 ## iOS

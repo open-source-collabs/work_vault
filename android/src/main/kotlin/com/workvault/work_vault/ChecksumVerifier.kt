@@ -106,6 +106,16 @@ internal fun evaluateChecksum(
     return ChecksumVerdict.Verified(sha256 = digests.sha256Hex, md5 = digests.md5Hex)
 }
 
+/**
+ * Picks the digest a completed file is checked against.
+ *
+ * A digest the caller supplied always wins, so a server cannot vouch for its own bytes. A server
+ * digest is used only when the caller supplied none, and [previous] carries an earlier value
+ * across retries and process restarts.
+ */
+internal fun resolveExpectedDigest(callerSupplied: String?, fromServer: String?, previous: String?): String? =
+    callerSupplied ?: fromServer ?: previous
+
 internal fun ByteArray.toHex(): String {
     val chars = CharArray(size * 2)
     val alphabet = "0123456789abcdef"
