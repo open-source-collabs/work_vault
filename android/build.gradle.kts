@@ -74,7 +74,7 @@ kotlin {
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
-    implementation("androidx.core:core-ktx:1.19.1")
+    implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("androidx.startup:startup-runtime:1.2.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test")

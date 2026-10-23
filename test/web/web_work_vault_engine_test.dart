@@ -8,7 +8,7 @@ import 'package:work_vault/src/models/work_task_config.dart';
 import 'package:work_vault/src/persistence/work_vault_database.dart';
 import 'package:work_vault/src/web/web_work_vault_engine.dart';
 
-import '../test/support.dart';
+import '../support.dart';
 
 void main() {
   late WorkVaultDatabase database;

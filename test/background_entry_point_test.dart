@@ -135,6 +135,7 @@ void main() {
       await send(tester, 'dispatch', payload(path, 'job-b'));
       await send(tester, 'shutdown');
       await send(tester, 'dispatch', payload(path, 'job-c'));
+      await send(tester, 'shutdown');
 
       final WorkVaultDatabase database = WorkVaultDatabase.openFile(path);
       addTearDown(database.close);

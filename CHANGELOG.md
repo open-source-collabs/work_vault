@@ -1,6 +1,7 @@
 ## 0.3.1
 
-* Android: Update `androidx.core:core-ktx` to 1.19.1 and `kotlin-gradle-plugin` to 2.4.21.
+* Android: Update `kotlin-gradle-plugin` to 2.4.21. Keep `androidx.core:core-ktx` on 1.16.0 for Android API 36 compatibility.
+* Fix Chrome web test suite location so `flutter test --platform chrome` resolves correctly in CI.
 
 ## 0.3.0
 

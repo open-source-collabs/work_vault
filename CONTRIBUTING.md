@@ -6,7 +6,7 @@
 flutter pub get
 flutter analyze
 flutter test
-flutter test --platform chrome test_web
+flutter test --platform chrome test/web
 ```
 
 ## Before opening a PR

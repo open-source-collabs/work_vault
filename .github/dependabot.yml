@@ -12,3 +12,6 @@ updates:
     directory: /android
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "androidx.core:core-ktx"
+        versions: [">= 1.17.0"]
