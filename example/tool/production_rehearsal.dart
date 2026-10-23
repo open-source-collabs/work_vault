@@ -47,20 +47,33 @@ Future<void> main(List<String> arguments) async {
   final Directory example = _exampleDirectory();
   final FixtureServer server = await FixtureServer.bind(
     port: port,
-    certificatePath: '${example.path}${Platform.pathSeparator}tool${Platform.pathSeparator}certs${Platform.pathSeparator}cert.pem',
-    keyPath: '${example.path}${Platform.pathSeparator}tool${Platform.pathSeparator}certs${Platform.pathSeparator}key.pem',
+    certificatePath:
+        '${example.path}${Platform.pathSeparator}tool${Platform.pathSeparator}certs${Platform.pathSeparator}cert.pem',
+    keyPath:
+        '${example.path}${Platform.pathSeparator}tool${Platform.pathSeparator}certs${Platform.pathSeparator}key.pem',
   );
   final String adb = _adb();
   final String device = requestedDevice ?? await _emulator(adb);
   await _reverse(adb, device, server.port);
   final String base = 'https://127.0.0.1:${server.port}';
   final int sdk = int.parse(
-    await _run(adb, <String>['-s', device, 'shell', 'getprop', 'ro.build.version.sdk']),
+    await _run(adb, <String>[
+      '-s',
+      device,
+      'shell',
+      'getprop',
+      'ro.build.version.sdk',
+    ]),
   );
-  stdout.writeln(
-    'Fixture $base sha=${server.sha256} device=$device api=$sdk',
+  stdout.writeln('Fixture $base sha=${server.sha256} device=$device api=$sdk');
+  final _Rehearsal rehearsal = _Rehearsal(
+    example,
+    adb,
+    device,
+    base,
+    server,
+    sdk,
   );
-  final _Rehearsal rehearsal = _Rehearsal(example, adb, device, base, server, sdk);
   final List<_Result> results = <_Result>[];
   // initialize() asks for POST_NOTIFICATIONS on API 33+. Granting it as soon as
   // each install lands keeps the system dialog from stalling a phase.
@@ -99,7 +112,8 @@ Future<void> main(List<String> arguments) async {
   try {
     await _checkFixture(server);
     await _clearAppData(adb, device);
-    for (final String scenario in scenarios.isEmpty ? _allScenarios : scenarios) {
+    for (final String scenario
+        in scenarios.isEmpty ? _allScenarios : scenarios) {
       results.add(await rehearsal.run(scenario));
     }
   } finally {
@@ -144,7 +158,14 @@ class _Result {
 }
 
 class _Rehearsal {
-  _Rehearsal(this.example, this.adb, this.device, this.base, this.server, this.sdk);
+  _Rehearsal(
+    this.example,
+    this.adb,
+    this.device,
+    this.base,
+    this.server,
+    this.sdk,
+  );
 
   final Directory example;
   final String adb;
@@ -167,7 +188,11 @@ class _Rehearsal {
         'quota' => await _quota(),
         _ => throw ArgumentError(scenario),
       };
-      return _Result(scenario, detail.startsWith('skipped') ? 'SKIP' : 'PASS', detail);
+      return _Result(
+        scenario,
+        detail.startsWith('skipped') ? 'SKIP' : 'PASS',
+        detail,
+      );
     } on Object catch (error) {
       stderr.writeln('$scenario failed: $error');
       return _Result(scenario, 'FAIL', '$error'.split('\n').first);
@@ -175,7 +200,13 @@ class _Rehearsal {
   }
 
   Future<String> _controls() async {
-    await _runPhase(example: example, device: device, phase: 'controls', base: base, server: server);
+    await _runPhase(
+      example: example,
+      device: device,
+      phase: 'controls',
+      base: base,
+      server: server,
+    );
     return 'enqueue, pause/resume, cancel, duplicate, 404, drop, truncated';
   }
 
@@ -201,7 +232,11 @@ class _Rehearsal {
     try {
       await _pollFile(adb, device, 'files/rehearsal/reboot_seeded');
       final String before = _jsonField(
-        await _readFile(adb, device, 'files/work_vault/tasks/reboot-transfer.json'),
+        await _readFile(
+          adb,
+          device,
+          'files/work_vault/tasks/reboot-transfer.json',
+        ),
         'status',
       );
       stdout.writeln('Reboot record before reboot: status=$before');
@@ -211,9 +246,18 @@ class _Rehearsal {
     }
     await seed.done.timeout(const Duration(minutes: 2), onTimeout: () => -1);
     await _run(adb, <String>['-s', device, 'wait-for-device']);
-    await _retry(() => _reverse(adb, device, server.port), const Duration(minutes: 2));
+    await _retry(
+      () => _reverse(adb, device, server.port),
+      const Duration(minutes: 2),
+    );
     await _retry(() async {
-      final String booted = await _run(adb, <String>['-s', device, 'shell', 'getprop', 'sys.boot_completed']);
+      final String booted = await _run(adb, <String>[
+        '-s',
+        device,
+        'shell',
+        'getprop',
+        'sys.boot_completed',
+      ]);
       if (booted != '1') {
         throw StateError('boot not complete');
       }
@@ -224,12 +268,24 @@ class _Rehearsal {
       const <String>{'completed'},
       const Duration(minutes: 6),
     );
-    final String launched = await _shell(<String>['dumpsys', 'activity', 'activities']);
+    final String launched = await _shell(<String>[
+      'dumpsys',
+      'activity',
+      'activities',
+    ]);
     final bool uiStarted = launched.contains('$_package/.MainActivity');
     if (uiStarted) {
-      throw StateError('MainActivity started before the check; the boot path is not isolated.');
+      throw StateError(
+        'MainActivity started before the check; the boot path is not isolated.',
+      );
     }
-    await _runPhase(example: example, device: device, phase: 'reboot-check', base: base, server: server);
+    await _runPhase(
+      example: example,
+      device: device,
+      phase: 'reboot-check',
+      base: base,
+      server: server,
+    );
     return 'rebooted mid-download; finished as $status before any UI launch';
   }
 
@@ -257,7 +313,11 @@ class _Rehearsal {
       await _pollFile(adb, device, 'files/rehearsal/battery_running');
       await _lowBattery();
       await _pollFile(adb, device, 'files/rehearsal/battery_stopped');
-      final String kept = await _readFile(adb, device, 'files/rehearsal/battery_stopped');
+      final String kept = await _readFile(
+        adb,
+        device,
+        'files/rehearsal/battery_stopped',
+      );
       await _shell(<String>['dumpsys', 'battery', 'reset']);
       await drop.done;
       return 'held at 5% before start; stopped mid-download with $kept bytes kept; both finished after reset';
@@ -288,18 +348,40 @@ class _Rehearsal {
     } on Object catch (error) {
       failure = error;
     }
-    final String crashes = await _run(adb, <String>['-s', device, 'logcat', '-b', 'crash', '-d']);
-    final String host = await _run(adb, <String>['-s', device, 'logcat', '-d', '-s', 'WorkVaultHost:I']);
+    final String crashes = await _run(adb, <String>[
+      '-s',
+      device,
+      'logcat',
+      '-b',
+      'crash',
+      '-d',
+    ]);
+    final String host = await _run(adb, <String>[
+      '-s',
+      device,
+      'logcat',
+      '-d',
+      '-s',
+      'WorkVaultHost:I',
+    ]);
     final String crash = crashes
         .split('\n')
-        .where((String line) => line.contains('Exception') || line.contains('FATAL'))
+        .where(
+          (String line) => line.contains('Exception') || line.contains('FATAL'),
+        )
         .take(3)
         .join(' | ');
     if (failure != null || crash.isNotEmpty) {
-      throw StateError('host=$mode crashed or failed: ${crash.isEmpty ? failure : crash}');
+      throw StateError(
+        'host=$mode crashed or failed: ${crash.isEmpty ? failure : crash}',
+      );
     }
-    if (!host.contains('Host factory asked for com.workvault.work_vault.WorkVaultWorker')) {
-      throw StateError('host=$mode: the host WorkerFactory never saw the plugin worker.\n$host');
+    if (!host.contains(
+      'Host factory asked for com.workvault.work_vault.WorkVaultWorker',
+    )) {
+      throw StateError(
+        'host=$mode: the host WorkerFactory never saw the plugin worker.\n$host',
+      );
     }
     return 'host $mode WorkManager config stayed active; plugin worker built by fallback';
   }
@@ -308,7 +390,12 @@ class _Rehearsal {
     if (sdk < 35) {
       return 'skipped: dataSync timeout needs API 35, device is API $sdk';
     }
-    await _shell(<String>['cmd', 'device_config', 'set_sync_disabled_for_tests', 'persistent']);
+    await _shell(<String>[
+      'cmd',
+      'device_config',
+      'set_sync_disabled_for_tests',
+      'persistent',
+    ]);
     await _shell(<String>[
       'cmd',
       'device_config',
@@ -329,29 +416,58 @@ class _Rehearsal {
       await _pollFile(adb, device, 'files/rehearsal/quota_seeded');
       await _shell(<String>['input', 'keyevent', 'KEYCODE_HOME']);
       await test.done;
-      final String statuses = await _readFile(adb, device, 'files/rehearsal/quota_statuses');
-      final String log = await _run(adb, <String>['-s', device, 'logcat', '-d']);
+      final String statuses = await _readFile(
+        adb,
+        device,
+        'files/rehearsal/quota_statuses',
+      );
+      final String log = await _run(adb, <String>[
+        '-s',
+        device,
+        'logcat',
+        '-d',
+      ]);
       final List<String> evidence = log
           .split('\n')
-          .where((String line) =>
-              line.contains('dataSync time limit reached') ||
-              line.contains('dataSync foreground unavailable') ||
-              line.contains('ForegroundServiceStartNotAllowed') ||
-              (line.contains('WM-') && line.toLowerCase().contains('timeout')))
+          .where(
+            (String line) =>
+                line.contains('dataSync time limit reached') ||
+                line.contains('dataSync foreground unavailable') ||
+                line.contains('ForegroundServiceStartNotAllowed') ||
+                (line.contains('WM-') &&
+                    line.toLowerCase().contains('timeout')),
+          )
           .map((String line) => line.trim())
           .toList();
       stdout.writeln('Quota evidence:\n${evidence.join('\n')}');
       if (!log.contains('dataSync time limit reached')) {
-        throw StateError('Download finished but the dataSync timeout never fired. statuses=$statuses');
+        throw StateError(
+          'Download finished but the dataSync timeout never fired. statuses=$statuses',
+        );
       }
       return 'onTimeout fired at 30 s; statuses $statuses; hash matched';
     } finally {
-      await _shell(<String>['cmd', 'device_config', 'delete', 'activity_manager', 'data_sync_fgs_timeout_duration']);
-      await _shell(<String>['cmd', 'device_config', 'set_sync_disabled_for_tests', 'none']);
+      await _shell(<String>[
+        'cmd',
+        'device_config',
+        'delete',
+        'activity_manager',
+        'data_sync_fgs_timeout_duration',
+      ]);
+      await _shell(<String>[
+        'cmd',
+        'device_config',
+        'set_sync_disabled_for_tests',
+        'none',
+      ]);
     }
   }
 
-  Future<String> _awaitRecordStatus(String taskId, Set<String> targets, Duration limit) async {
+  Future<String> _awaitRecordStatus(
+    String taskId,
+    Set<String> targets,
+    Duration limit,
+  ) async {
     final DateTime deadline = DateTime.now().add(limit);
     String? last;
     while (DateTime.now().isBefore(deadline)) {
@@ -572,7 +688,9 @@ Future<void> _removeMarker(String adb, String device, String path) async {
     path,
   ]);
   if (result.exitCode != 0) {
-    stdout.writeln('Marker remove skipped for $path: ${result.stdout}${result.stderr}');
+    stdout.writeln(
+      'Marker remove skipped for $path: ${result.stdout}${result.stderr}',
+    );
   }
 }
 
@@ -663,19 +781,15 @@ String _jsonField(String json, String key) {
 }
 
 Future<List<int>> _readBytes(String adb, String device, String path) async {
-  final ProcessResult result = await Process.run(
-    adb,
-    <String>[
-      '-s',
-      device,
-      'exec-out',
-      'run-as',
-      _package,
-      'cat',
-      path,
-    ],
-    stdoutEncoding: null,
-  );
+  final ProcessResult result = await Process.run(adb, <String>[
+    '-s',
+    device,
+    'exec-out',
+    'run-as',
+    _package,
+    'cat',
+    path,
+  ], stdoutEncoding: null);
   if (result.exitCode != 0) {
     throw StateError('Could not read $path: ${result.stderr}');
   }

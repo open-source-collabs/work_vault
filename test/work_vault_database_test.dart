@@ -45,73 +45,76 @@ void main() {
     expect(database.getTasks(), hasLength(1));
   });
 
-  test('completed file stores a verified digest and a later change mismatches', () async {
-    final Directory directory = await Directory.systemTemp.createTemp(
-      'work-vault-db-',
-    );
-    addTearDown(() => directory.delete(recursive: true));
-    final File file = File('${directory.path}/archive.bin');
-    await file.writeAsString('abc');
-    final WorkVaultDatabase database = WorkVaultDatabase.memory();
-    addTearDown(database.close);
-    final BackgroundEventProcessor processor = BackgroundEventProcessor(
-      invoke: (int handle, WorkVaultBackgroundEvent event) async {},
-    );
+  test(
+    'completed file stores a verified digest and a later change mismatches',
+    () async {
+      final Directory directory = await Directory.systemTemp.createTemp(
+        'work-vault-db-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final File file = File('${directory.path}/archive.bin');
+      await file.writeAsString('abc');
+      final WorkVaultDatabase database = WorkVaultDatabase.memory();
+      addTearDown(database.close);
+      final BackgroundEventProcessor processor = BackgroundEventProcessor(
+        invoke: (int handle, WorkVaultBackgroundEvent event) async {},
+      );
 
-    final WorkVaultBackgroundEvent verified = await processor.apply(
-      database,
-      <Object?, Object?>{
-        'kind': 'status',
+      final WorkVaultBackgroundEvent verified = await processor.apply(
+        database,
+        <Object?, Object?>{
+          'kind': 'status',
+          'taskId': 'job-1',
+          'status': 'completed',
+          'filePath': file.path,
+          'downloadedBytes': 3,
+          'databasePath': '${directory.path}/work_vault.db',
+          'callbackHandle': 7,
+        },
+      );
+      expect(verified.verificationStatus, Sha256VerificationStatus.verified);
+      expect(
+        verified.sha256,
+        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      );
+
+      await file.writeAsString('abcd');
+      final WorkVaultBackgroundEvent mismatched = await processor.apply(
+        database,
+        <Object?, Object?>{
+          'kind': 'status',
+          'taskId': 'job-1',
+          'status': 'completed',
+          'filePath': file.path,
+          'downloadedBytes': 4,
+          'databasePath': '${directory.path}/work_vault.db',
+        },
+      );
+      expect(mismatched.verificationStatus, Sha256VerificationStatus.mismatch);
+      expect(mismatched.sha256, verified.sha256);
+
+      final List<int> handles = <int>[];
+      final BackgroundEventProcessor recording = BackgroundEventProcessor(
+        invoke: (int handle, WorkVaultBackgroundEvent event) async {
+          handles.add(handle);
+        },
+      );
+      await recording.apply(database, <Object?, Object?>{
+        'kind': 'progress',
         'taskId': 'job-1',
-        'status': 'completed',
+        'status': 'running',
         'filePath': file.path,
-        'downloadedBytes': 3,
+        'downloadedBytes': 1,
         'databasePath': '${directory.path}/work_vault.db',
         'callbackHandle': 7,
-      },
-    );
-    expect(verified.verificationStatus, Sha256VerificationStatus.verified);
-    expect(
-      verified.sha256,
-      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-    );
-
-    await file.writeAsString('abcd');
-    final WorkVaultBackgroundEvent mismatched = await processor.apply(
-      database,
-      <Object?, Object?>{
-        'kind': 'status',
-        'taskId': 'job-1',
-        'status': 'completed',
-        'filePath': file.path,
-        'downloadedBytes': 4,
-        'databasePath': '${directory.path}/work_vault.db',
-      },
-    );
-    expect(mismatched.verificationStatus, Sha256VerificationStatus.mismatch);
-    expect(mismatched.sha256, verified.sha256);
-
-    final List<int> handles = <int>[];
-    final BackgroundEventProcessor recording = BackgroundEventProcessor(
-      invoke: (int handle, WorkVaultBackgroundEvent event) async {
-        handles.add(handle);
-      },
-    );
-    await recording.apply(database, <Object?, Object?>{
-      'kind': 'progress',
-      'taskId': 'job-1',
-      'status': 'running',
-      'filePath': file.path,
-      'downloadedBytes': 1,
-      'databasePath': '${directory.path}/work_vault.db',
-      'callbackHandle': 7,
-    });
-    expect(handles, <int>[7]);
-    expect(
-      database.getTask('job-1')?.verificationStatus,
-      Sha256VerificationStatus.mismatch,
-    );
-  });
+      });
+      expect(handles, <int>[7]);
+      expect(
+        database.getTask('job-1')?.verificationStatus,
+        Sha256VerificationStatus.mismatch,
+      );
+    },
+  );
 
   test('a missing completed file is recorded as missing', () async {
     final WorkVaultDatabase database = WorkVaultDatabase.memory();
@@ -135,4 +138,7 @@ void main() {
   });
 }
 
-Future<void> _ignoreCallback(int handle, WorkVaultBackgroundEvent event) async {}
+Future<void> _ignoreCallback(
+  int handle,
+  WorkVaultBackgroundEvent event,
+) async {}

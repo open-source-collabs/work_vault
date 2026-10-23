@@ -22,7 +22,9 @@ final class WorkVault {
   WorkVault._(this._engine);
 
   /// Vault bound to the platform engine.
-  static final WorkVault instance = WorkVault._(createPlatformWorkVaultEngine());
+  static final WorkVault instance = WorkVault._(
+    createPlatformWorkVaultEngine(),
+  );
 
   /// Remembers [handler] for a headless engine started after this UI engine is gone.
   ///

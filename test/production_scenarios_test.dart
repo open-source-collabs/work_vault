@@ -96,7 +96,10 @@ void main() {
     });
 
     test('getTasks before initialize is rejected', () async {
-      await expectLater(vault.getTasks(), throwsA(isA<WorkVaultNotInitialized>()));
+      await expectLater(
+        vault.getTasks(),
+        throwsA(isA<WorkVaultNotInitialized>()),
+      );
     });
 
     test('a failed initialize can be retried', () async {
@@ -108,7 +111,10 @@ void main() {
       engine.rows['job-1'] = sampleSnapshot();
       await vault.initialize();
       expect(vault.isInitialized, isTrue);
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.enqueued);
+      expect(
+        vault.observationFor('job-1')?.snapshot.status,
+        TaskStatus.enqueued,
+      );
     });
 
     test('dispose during initialize drops the in-flight session', () async {
@@ -121,26 +127,31 @@ void main() {
       expect(vault.observationFor('job-1'), isNull);
     });
 
-    test('host events that arrive during initialize are applied in order', () async {
-      engine.rows['job-1'] = sampleSnapshot();
-      engine.duringInitialize = () {
-        engine.observer?.onStatusChanged(
-          sampleSnapshot(status: TaskStatus.running),
-        );
-        engine.observer?.onProgress(_progress(bytes: 25, total: 100));
-      };
+    test(
+      'host events that arrive during initialize are applied in order',
+      () async {
+        engine.rows['job-1'] = sampleSnapshot();
+        engine.duringInitialize = () {
+          engine.observer?.onStatusChanged(
+            sampleSnapshot(status: TaskStatus.running),
+          );
+          engine.observer?.onProgress(_progress(bytes: 25, total: 100));
+        };
 
-      await vault.initialize();
+        await vault.initialize();
 
-      final TaskObservation? observation = vault.observationFor('job-1');
-      expect(observation?.snapshot.status, TaskStatus.running);
-      expect(observation?.progress?.bytesDownloaded, 25);
-      expect(observation?.progress?.fraction, 0.25);
-    });
+        final TaskObservation? observation = vault.observationFor('job-1');
+        expect(observation?.snapshot.status, TaskStatus.running);
+        expect(observation?.progress?.bytesDownloaded, 25);
+        expect(observation?.progress?.fraction, 0.25);
+      },
+    );
 
     test('a second initialize does not reload the host', () async {
       await vault.initialize();
-      final int loads = engine.calls.where((String call) => call == 'getTasks').length;
+      final int loads = engine.calls
+          .where((String call) => call == 'getTasks')
+          .length;
       await vault.initialize();
       expect(
         engine.calls.where((String call) => call == 'getTasks'),
@@ -148,24 +159,27 @@ void main() {
       );
     });
 
-    test('enqueue publishes the host snapshot and rejects a duplicate id', () async {
-      await vault.initialize();
-      final TaskSnapshot snapshot = await vault.enqueue(sampleConfig());
-      expect(snapshot.status, TaskStatus.enqueued);
-      expect(vault.observationFor('job-1')?.snapshot, snapshot);
+    test(
+      'enqueue publishes the host snapshot and rejects a duplicate id',
+      () async {
+        await vault.initialize();
+        final TaskSnapshot snapshot = await vault.enqueue(sampleConfig());
+        expect(snapshot.status, TaskStatus.enqueued);
+        expect(vault.observationFor('job-1')?.snapshot, snapshot);
 
-      await expectLater(
-        vault.enqueue(sampleConfig()),
-        throwsA(
-          isA<DuplicateTask>().having(
-            (DuplicateTask error) => error.taskId,
-            'taskId',
-            'job-1',
+        await expectLater(
+          vault.enqueue(sampleConfig()),
+          throwsA(
+            isA<DuplicateTask>().having(
+              (DuplicateTask error) => error.taskId,
+              'taskId',
+              'job-1',
+            ),
           ),
-        ),
-      );
-      expect(engine.enqueued, hasLength(1));
-    });
+        );
+        expect(engine.enqueued, hasLength(1));
+      },
+    );
 
     test('an http url never reaches the host', () async {
       await vault.initialize();
@@ -176,114 +190,167 @@ void main() {
       expect(engine.enqueued, isEmpty);
     });
 
-    test('a mismatched host task id is a platform fault and is not cached', () async {
-      await vault.initialize();
-      engine.enqueueTaskId = 'other-job';
-      await expectLater(vault.enqueue(sampleConfig()), throwsA(isA<PlatformFault>()));
-      expect(vault.observationFor('job-1'), isNull);
-      expect(vault.observationFor('other-job'), isNull);
-    });
+    test(
+      'a mismatched host task id is a platform fault and is not cached',
+      () async {
+        await vault.initialize();
+        engine.enqueueTaskId = 'other-job';
+        await expectLater(
+          vault.enqueue(sampleConfig()),
+          throwsA(isA<PlatformFault>()),
+        );
+        expect(vault.observationFor('job-1'), isNull);
+        expect(vault.observationFor('other-job'), isNull);
+      },
+    );
 
     test('pause from enqueued is illegal and does not call the host', () async {
       await vault.initialize();
       await vault.enqueue(sampleConfig());
-      await expectLater(vault.pause('job-1'), throwsA(isA<IllegalTaskTransition>()));
+      await expectLater(
+        vault.pause('job-1'),
+        throwsA(isA<IllegalTaskTransition>()),
+      );
       expect(engine.calls, isNot(contains('pause:job-1')));
     });
 
     test('resume from running is illegal', () async {
       await vault.initialize();
       await vault.enqueue(sampleConfig());
-      engine.observer?.onStatusChanged(sampleSnapshot(status: TaskStatus.running));
+      engine.observer?.onStatusChanged(
+        sampleSnapshot(status: TaskStatus.running),
+      );
       await pumpEventQueue();
-      await expectLater(vault.resume('job-1'), throwsA(isA<IllegalTaskTransition>()));
+      await expectLater(
+        vault.resume('job-1'),
+        throwsA(isA<IllegalTaskTransition>()),
+      );
       expect(engine.calls, isNot(contains('resume:job-1')));
     });
 
     test('cancel from completed is illegal', () async {
       engine.rows['job-1'] = sampleSnapshot(status: TaskStatus.completed);
       await vault.initialize();
-      await expectLater(vault.cancel('job-1'), throwsA(isA<IllegalTaskTransition>()));
+      await expectLater(
+        vault.cancel('job-1'),
+        throwsA(isA<IllegalTaskTransition>()),
+      );
       expect(engine.calls, isNot(contains('cancel:job-1')));
     });
 
     test('pause, resume, and cancel follow the running task', () async {
       await vault.initialize();
       await vault.enqueue(sampleConfig());
-      engine.observer?.onStatusChanged(sampleSnapshot(status: TaskStatus.running));
+      engine.observer?.onStatusChanged(
+        sampleSnapshot(status: TaskStatus.running),
+      );
       await pumpEventQueue();
 
       await vault.pause('job-1');
       expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.paused);
       await vault.resume('job-1');
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.running);
+      expect(
+        vault.observationFor('job-1')?.snapshot.status,
+        TaskStatus.running,
+      );
       await vault.cancel('job-1');
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.cancelled);
-      expect(engine.calls, containsAll(<String>['pause:job-1', 'resume:job-1', 'cancel:job-1']));
+      expect(
+        vault.observationFor('job-1')?.snapshot.status,
+        TaskStatus.cancelled,
+      );
+      expect(
+        engine.calls,
+        containsAll(<String>['pause:job-1', 'resume:job-1', 'cancel:job-1']),
+      );
     });
 
-    test('pause clears a failure that was attached to the running row', () async {
-      await vault.initialize();
-      engine.rows['job-1'] = sampleSnapshot(
-        status: TaskStatus.running,
-        failure: const TaskFailure(
-          taskId: 'job-1',
-          code: 'http',
-          message: 'Transfer failed with HTTP 503.',
-          httpStatus: 503,
-          retryable: true,
-        ),
-      );
-      await vault.getTask('job-1');
-      await vault.pause('job-1');
-      expect(vault.observationFor('job-1')?.snapshot.failure, isNull);
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.paused);
-    });
+    test(
+      'pause clears a failure that was attached to the running row',
+      () async {
+        await vault.initialize();
+        engine.rows['job-1'] = sampleSnapshot(
+          status: TaskStatus.running,
+          failure: const TaskFailure(
+            taskId: 'job-1',
+            code: 'http',
+            message: 'Transfer failed with HTTP 503.',
+            httpStatus: 503,
+            retryable: true,
+          ),
+        );
+        await vault.getTask('job-1');
+        await vault.pause('job-1');
+        expect(vault.observationFor('job-1')?.snapshot.failure, isNull);
+        expect(
+          vault.observationFor('job-1')?.snapshot.status,
+          TaskStatus.paused,
+        );
+      },
+    );
 
     test('a missing task cannot be cancelled', () async {
       await vault.initialize();
       await expectLater(
         vault.cancel('missing'),
-        throwsA(isA<TaskNotFound>().having((TaskNotFound error) => error.taskId, 'taskId', 'missing')),
+        throwsA(
+          isA<TaskNotFound>().having(
+            (TaskNotFound error) => error.taskId,
+            'taskId',
+            'missing',
+          ),
+        ),
       );
     });
 
-    test('a command loads a task that is on the host but not yet cached', () async {
-      await vault.initialize();
-      engine.rows['job-1'] = sampleSnapshot(status: TaskStatus.running);
-      await vault.pause('job-1');
-      expect(engine.calls, contains('getTask:job-1'));
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.paused);
-    });
+    test(
+      'a command loads a task that is on the host but not yet cached',
+      () async {
+        await vault.initialize();
+        engine.rows['job-1'] = sampleSnapshot(status: TaskStatus.running);
+        await vault.pause('job-1');
+        expect(engine.calls, contains('getTask:job-1'));
+        expect(
+          vault.observationFor('job-1')?.snapshot.status,
+          TaskStatus.paused,
+        );
+      },
+    );
 
-    test('progress updates the cached fraction without a second status event', () async {
-      await vault.initialize();
-      await vault.enqueue(sampleConfig());
-      engine.observer?.onStatusChanged(sampleSnapshot(status: TaskStatus.running));
-      await pumpEventQueue();
+    test(
+      'progress updates the cached fraction without a second status event',
+      () async {
+        await vault.initialize();
+        await vault.enqueue(sampleConfig());
+        engine.observer?.onStatusChanged(
+          sampleSnapshot(status: TaskStatus.running),
+        );
+        await pumpEventQueue();
 
-      final List<int> bytes = <int>[];
-      final List<TaskStatus> statuses = <TaskStatus>[];
-      vault.watchProgress('job-1').listen((TaskProgress progress) {
-        bytes.add(progress.bytesDownloaded);
-      });
-      vault.watchStatus(taskId: 'job-1').listen((TaskSnapshot snapshot) {
-        statuses.add(snapshot.status);
-      });
-      await pumpEventQueue();
+        final List<int> bytes = <int>[];
+        final List<TaskStatus> statuses = <TaskStatus>[];
+        vault.watchProgress('job-1').listen((TaskProgress progress) {
+          bytes.add(progress.bytesDownloaded);
+        });
+        vault.watchStatus(taskId: 'job-1').listen((TaskSnapshot snapshot) {
+          statuses.add(snapshot.status);
+        });
+        await pumpEventQueue();
 
-      engine.observer?.onProgress(_progress(bytes: 50, total: 100));
-      engine.observer?.onProgress(_progress(bytes: 50, total: 100));
-      await pumpEventQueue();
+        engine.observer?.onProgress(_progress(bytes: 50, total: 100));
+        engine.observer?.onProgress(_progress(bytes: 50, total: 100));
+        await pumpEventQueue();
 
-      expect(bytes, <int>[50]);
-      expect(statuses, <TaskStatus>[TaskStatus.running]);
-      expect(vault.observationFor('job-1')?.progress?.fraction, 0.5);
-    });
+        expect(bytes, <int>[50]);
+        expect(statuses, <TaskStatus>[TaskStatus.running]);
+        expect(vault.observationFor('job-1')?.progress?.fraction, 0.5);
+      },
+    );
 
     test('progress for an unknown task is ignored', () async {
       await vault.initialize();
-      engine.observer?.onProgress(_progress(bytes: 10, total: 10, taskId: 'ghost'));
+      engine.observer?.onProgress(
+        _progress(bytes: 10, total: 10, taskId: 'ghost'),
+      );
       await pumpEventQueue();
       expect(vault.observationFor('ghost'), isNull);
     });
@@ -299,9 +366,14 @@ void main() {
     test('a completed task ignores a later running update', () async {
       engine.rows['job-1'] = sampleSnapshot(status: TaskStatus.completed);
       await vault.initialize();
-      engine.observer?.onStatusChanged(sampleSnapshot(status: TaskStatus.running));
+      engine.observer?.onStatusChanged(
+        sampleSnapshot(status: TaskStatus.running),
+      );
       await pumpEventQueue();
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.completed);
+      expect(
+        vault.observationFor('job-1')?.snapshot.status,
+        TaskStatus.completed,
+      );
     });
 
     test('a completed task ignores a later failed update', () async {
@@ -320,7 +392,10 @@ void main() {
         ),
       );
       await pumpEventQueue();
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.completed);
+      expect(
+        vault.observationFor('job-1')?.snapshot.status,
+        TaskStatus.completed,
+      );
       expect(vault.observationFor('job-1')?.snapshot.failure, isNull);
     });
 
@@ -329,22 +404,38 @@ void main() {
       await vault.initialize();
       engine.observer?.onStatusChanged(sampleSnapshot());
       await pumpEventQueue();
-      expect(vault.observationFor('job-1')?.snapshot.status, TaskStatus.cancelled);
+      expect(
+        vault.observationFor('job-1')?.snapshot.status,
+        TaskStatus.cancelled,
+      );
     });
 
-    test('getTasks can filter by status and still keeps every row cached', () async {
-      await vault.initialize();
-      await vault.enqueue(sampleConfig());
-      await vault.enqueue(sampleConfig(taskId: 'job-2'));
-      engine.rows['job-2'] = sampleSnapshot(taskId: 'job-2', status: TaskStatus.running);
-      engine.observer?.onStatusChanged(engine.rows['job-2']!);
-      await pumpEventQueue();
+    test(
+      'getTasks can filter by status and still keeps every row cached',
+      () async {
+        await vault.initialize();
+        await vault.enqueue(sampleConfig());
+        await vault.enqueue(sampleConfig(taskId: 'job-2'));
+        engine.rows['job-2'] = sampleSnapshot(
+          taskId: 'job-2',
+          status: TaskStatus.running,
+        );
+        engine.observer?.onStatusChanged(engine.rows['job-2']!);
+        await pumpEventQueue();
 
-      final List<TaskSnapshot> running = await vault.getTasks(status: TaskStatus.running);
-      expect(running.map((TaskSnapshot task) => task.taskId), <String>['job-2']);
-      expect(vault.observationFor('job-1'), isNotNull);
-      expect(vault.observationFor('job-2')?.snapshot.status, TaskStatus.running);
-    });
+        final List<TaskSnapshot> running = await vault.getTasks(
+          status: TaskStatus.running,
+        );
+        expect(running.map((TaskSnapshot task) => task.taskId), <String>[
+          'job-2',
+        ]);
+        expect(vault.observationFor('job-1'), isNotNull);
+        expect(
+          vault.observationFor('job-2')?.snapshot.status,
+          TaskStatus.running,
+        );
+      },
+    );
 
     test('getTasks drops rows the host no longer returns', () async {
       engine.rows['job-1'] = sampleSnapshot();
@@ -378,7 +469,10 @@ void main() {
 
     test('watchStatus without an id replays every cached task', () async {
       engine.rows['job-1'] = sampleSnapshot();
-      engine.rows['job-2'] = sampleSnapshot(taskId: 'job-2', status: TaskStatus.running);
+      engine.rows['job-2'] = sampleSnapshot(
+        taskId: 'job-2',
+        status: TaskStatus.running,
+      );
       await vault.initialize();
       final List<String> ids = <String>[];
       vault.watchStatus().listen((TaskSnapshot snapshot) {
@@ -388,71 +482,87 @@ void main() {
       expect(ids, containsAll(<String>['job-1', 'job-2']));
     });
 
-    test('watchProgress replays the sample carried by the cached snapshot', () async {
-      const TaskProgress sample = TaskProgress(
-        taskId: 'job-1',
-        bytesDownloaded: 8,
-        totalBytes: 16,
-        bytesPerSecond: 4,
-        elapsed: Duration(seconds: 2),
-        percentage: 50,
-      );
-      engine.rows['job-1'] = sampleSnapshot(status: TaskStatus.running, progress: sample);
-      await vault.initialize();
-      final List<int> bytes = <int>[];
-      vault.watchProgress('job-1').listen((TaskProgress progress) {
-        bytes.add(progress.bytesDownloaded);
-      });
-      await pumpEventQueue();
-      expect(bytes, <int>[8]);
-    });
+    test(
+      'watchProgress replays the sample carried by the cached snapshot',
+      () async {
+        const TaskProgress sample = TaskProgress(
+          taskId: 'job-1',
+          bytesDownloaded: 8,
+          totalBytes: 16,
+          bytesPerSecond: 4,
+          elapsed: Duration(seconds: 2),
+          percentage: 50,
+        );
+        engine.rows['job-1'] = sampleSnapshot(
+          status: TaskStatus.running,
+          progress: sample,
+        );
+        await vault.initialize();
+        final List<int> bytes = <int>[];
+        vault.watchProgress('job-1').listen((TaskProgress progress) {
+          bytes.add(progress.bytesDownloaded);
+        });
+        await pumpEventQueue();
+        expect(bytes, <int>[8]);
+      },
+    );
 
-    test('a listener attached before initialize receives the hydrated row', () async {
-      engine.rows['job-1'] = sampleSnapshot(status: TaskStatus.paused);
-      final List<TaskStatus> statuses = <TaskStatus>[];
-      vault.watchStatus(taskId: 'job-1').listen((TaskSnapshot snapshot) {
-        statuses.add(snapshot.status);
-      });
-      await vault.initialize();
-      await pumpEventQueue();
-      expect(statuses, <TaskStatus>[TaskStatus.paused]);
-    });
+    test(
+      'a listener attached before initialize receives the hydrated row',
+      () async {
+        engine.rows['job-1'] = sampleSnapshot(status: TaskStatus.paused);
+        final List<TaskStatus> statuses = <TaskStatus>[];
+        vault.watchStatus(taskId: 'job-1').listen((TaskSnapshot snapshot) {
+          statuses.add(snapshot.status);
+        });
+        await vault.initialize();
+        await pumpEventQueue();
+        expect(statuses, <TaskStatus>[TaskStatus.paused]);
+      },
+    );
 
-    test('dispose ends the session and the next initialize starts empty', () async {
-      await vault.initialize();
-      await vault.enqueue(sampleConfig());
-      final List<TaskSnapshot> seen = <TaskSnapshot>[];
-      final List<bool> closed = <bool>[false];
-      vault.watchStatus().listen(
-        seen.add,
-        onDone: () {
-          closed[0] = true;
-        },
-      );
-      await vault.dispose();
-      await pumpEventQueue();
+    test(
+      'dispose ends the session and the next initialize starts empty',
+      () async {
+        await vault.initialize();
+        await vault.enqueue(sampleConfig());
+        final List<TaskSnapshot> seen = <TaskSnapshot>[];
+        final List<bool> closed = <bool>[false];
+        vault.watchStatus().listen(
+          seen.add,
+          onDone: () {
+            closed[0] = true;
+          },
+        );
+        await vault.dispose();
+        await pumpEventQueue();
 
-      expect(vault.isInitialized, isFalse);
-      expect(vault.observationFor('job-1'), isNull);
-      expect(closed, <bool>[true]);
-      expect(engine.calls, contains('clearObserver'));
+        expect(vault.isInitialized, isFalse);
+        expect(vault.observationFor('job-1'), isNull);
+        expect(closed, <bool>[true]);
+        expect(engine.calls, contains('clearObserver'));
 
-      engine.rows.clear();
-      await vault.initialize();
-      expect(vault.observationFor('job-1'), isNull);
-    });
+        engine.rows.clear();
+        await vault.initialize();
+        expect(vault.observationFor('job-1'), isNull);
+      },
+    );
 
     test('two downloads keep independent progress', () async {
       await vault.initialize();
       await vault.enqueue(sampleConfig());
       await vault.enqueue(sampleConfig(taskId: 'job-2'));
-      engine.observer?.onStatusChanged(sampleSnapshot(status: TaskStatus.running));
+      engine.observer?.onStatusChanged(
+        sampleSnapshot(status: TaskStatus.running),
+      );
       engine.observer?.onStatusChanged(
         sampleSnapshot(taskId: 'job-2', status: TaskStatus.running),
       );
       await pumpEventQueue();
       engine.observer?.onProgress(_progress(bytes: 10, total: 100));
-      engine.observer?.onProgress(_progress(bytes: 80, total: 100, taskId: 'job-2'));
+      engine.observer?.onProgress(
+        _progress(bytes: 80, total: 100, taskId: 'job-2'),
+      );
       await pumpEventQueue();
 
       expect(vault.observationFor('job-1')?.progress?.bytesDownloaded, 10);
@@ -481,10 +591,7 @@ void main() {
       expect(sampleConfig(), equals(sampleConfig()));
       expect(sampleConfig().hashCode, sampleConfig().hashCode);
       expect(sampleSnapshot(), equals(sampleSnapshot()));
-      expect(
-        const RetryPolicy(),
-        equals(const RetryPolicy()),
-      );
+      expect(const RetryPolicy(), equals(const RetryPolicy()));
       expect(
         const BatteryConstraint(requiresCharging: true),
         isNot(equals(const BatteryConstraint())),
@@ -516,7 +623,9 @@ void main() {
     );
 
     setUp(() async {
-      directory = await Directory.systemTemp.createTemp('work-vault-scenarios-');
+      directory = await Directory.systemTemp.createTemp(
+        'work-vault-scenarios-',
+      );
       database = WorkVaultDatabase.memory();
     });
 
@@ -528,7 +637,9 @@ void main() {
     });
 
     test('an empty completed file stores the empty SHA-256', () async {
-      final File file = File('${directory.path}${Platform.pathSeparator}empty.bin');
+      final File file = File(
+        '${directory.path}${Platform.pathSeparator}empty.bin',
+      );
       await file.writeAsBytes(<int>[]);
       final WorkVaultBackgroundEvent event = await processor.apply(
         database,
@@ -542,7 +653,9 @@ void main() {
     });
 
     test('a one-byte file stores its digest', () async {
-      final File file = File('${directory.path}${Platform.pathSeparator}one.bin');
+      final File file = File(
+        '${directory.path}${Platform.pathSeparator}one.bin',
+      );
       await file.writeAsBytes(<int>[0x61]);
       final WorkVaultBackgroundEvent event = await processor.apply(
         database,
@@ -554,49 +667,61 @@ void main() {
       );
     });
 
-    test('a resumed file is hashed only after the full body is on disk', () async {
-      final File file = File('${directory.path}${Platform.pathSeparator}resume.bin');
-      await file.writeAsBytes(<int>[0x61, 0x62]);
-      await processor.apply(database, <Object?, Object?>{
-        'kind': 'progress',
-        'taskId': 'resume',
-        'status': 'running',
-        'filePath': file.path,
-        'downloadedBytes': 2,
-        'totalBytes': 3,
-        'databasePath': ':memory:',
-      });
-      expect(database.getTask('resume')?.sha256, isNull);
-      expect(
-        database.getTask('resume')?.verificationStatus,
-        Sha256VerificationStatus.pending,
-      );
+    test(
+      'a resumed file is hashed only after the full body is on disk',
+      () async {
+        final File file = File(
+          '${directory.path}${Platform.pathSeparator}resume.bin',
+        );
+        await file.writeAsBytes(<int>[0x61, 0x62]);
+        await processor.apply(database, <Object?, Object?>{
+          'kind': 'progress',
+          'taskId': 'resume',
+          'status': 'running',
+          'filePath': file.path,
+          'downloadedBytes': 2,
+          'totalBytes': 3,
+          'databasePath': ':memory:',
+        });
+        expect(database.getTask('resume')?.sha256, isNull);
+        expect(
+          database.getTask('resume')?.verificationStatus,
+          Sha256VerificationStatus.pending,
+        );
 
-      await file.writeAsBytes(<int>[0x61, 0x62, 0x63]);
-      final WorkVaultBackgroundEvent event = await processor.apply(
-        database,
-        _completed(file: file, bytes: 3, taskId: 'resume'),
-      );
-      expect(event.verificationStatus, Sha256VerificationStatus.verified);
-      expect(
-        event.sha256,
-        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
-      );
-    });
+        await file.writeAsBytes(<int>[0x61, 0x62, 0x63]);
+        final WorkVaultBackgroundEvent event = await processor.apply(
+          database,
+          _completed(file: file, bytes: 3, taskId: 'resume'),
+        );
+        expect(event.verificationStatus, Sha256VerificationStatus.verified);
+        expect(
+          event.sha256,
+          'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+        );
+      },
+    );
 
-    test('binary content that includes a zero byte still hashes the whole file', () async {
-      final File file = File('${directory.path}${Platform.pathSeparator}binary.bin');
-      await file.writeAsBytes(<int>[0x00, 0xff, 0x10]);
-      final WorkVaultBackgroundEvent event = await processor.apply(
-        database,
-        _completed(file: file, bytes: 3, taskId: 'binary'),
-      );
-      expect(event.verificationStatus, Sha256VerificationStatus.verified);
-      expect(event.sha256, hasLength(64));
-    });
+    test(
+      'binary content that includes a zero byte still hashes the whole file',
+      () async {
+        final File file = File(
+          '${directory.path}${Platform.pathSeparator}binary.bin',
+        );
+        await file.writeAsBytes(<int>[0x00, 0xff, 0x10]);
+        final WorkVaultBackgroundEvent event = await processor.apply(
+          database,
+          _completed(file: file, bytes: 3, taskId: 'binary'),
+        );
+        expect(event.verificationStatus, Sha256VerificationStatus.verified);
+        expect(event.sha256, hasLength(64));
+      },
+    );
 
     test('a changed file after verification is a mismatch and keeps the first digest', () async {
-      final File file = File('${directory.path}${Platform.pathSeparator}changed.bin');
+      final File file = File(
+        '${directory.path}${Platform.pathSeparator}changed.bin',
+      );
       await file.writeAsString('abc');
       final WorkVaultBackgroundEvent first = await processor.apply(
         database,
@@ -628,11 +753,19 @@ void main() {
     });
 
     test('a progress event does not erase a mismatch', () async {
-      final File file = File('${directory.path}${Platform.pathSeparator}sticky.bin');
+      final File file = File(
+        '${directory.path}${Platform.pathSeparator}sticky.bin',
+      );
       await file.writeAsString('abc');
-      await processor.apply(database, _completed(file: file, bytes: 3, taskId: 'sticky'));
+      await processor.apply(
+        database,
+        _completed(file: file, bytes: 3, taskId: 'sticky'),
+      );
       await file.writeAsString('zzz');
-      await processor.apply(database, _completed(file: file, bytes: 3, taskId: 'sticky'));
+      await processor.apply(
+        database,
+        _completed(file: file, bytes: 3, taskId: 'sticky'),
+      );
       await processor.apply(database, <Object?, Object?>{
         'kind': 'progress',
         'taskId': 'sticky',
@@ -682,14 +815,27 @@ void main() {
     });
 
     test('two tasks stay isolated in the same database', () async {
-      final File first = File('${directory.path}${Platform.pathSeparator}a.bin');
-      final File second = File('${directory.path}${Platform.pathSeparator}b.bin');
+      final File first = File(
+        '${directory.path}${Platform.pathSeparator}a.bin',
+      );
+      final File second = File(
+        '${directory.path}${Platform.pathSeparator}b.bin',
+      );
       await first.writeAsString('abc');
       await second.writeAsString('abcd');
-      await processor.apply(database, _completed(file: first, bytes: 3, taskId: 'a'));
-      await processor.apply(database, _completed(file: second, bytes: 4, taskId: 'b'));
+      await processor.apply(
+        database,
+        _completed(file: first, bytes: 3, taskId: 'a'),
+      );
+      await processor.apply(
+        database,
+        _completed(file: second, bytes: 4, taskId: 'b'),
+      );
       expect(database.getTasks(), hasLength(2));
-      expect(database.getTask('a')?.sha256, isNot(database.getTask('b')?.sha256));
+      expect(
+        database.getTask('a')?.sha256,
+        isNot(database.getTask('b')?.sha256),
+      );
     });
 
     test('a null etag on update keeps the stored tag', () {
@@ -754,8 +900,12 @@ void main() {
     });
 
     test('a file database round-trips a paused download', () async {
-      final File store = File('${directory.path}${Platform.pathSeparator}vault.db');
-      final WorkVaultDatabase fileDatabase = WorkVaultDatabase.openFile(store.path);
+      final File store = File(
+        '${directory.path}${Platform.pathSeparator}vault.db',
+      );
+      final WorkVaultDatabase fileDatabase = WorkVaultDatabase.openFile(
+        store.path,
+      );
       fileDatabase.upsert(
         WorkVaultTaskRecord(
           taskId: 'disk',
@@ -821,21 +971,22 @@ final List<_ConfigCase> _acceptedConfigs = <_ConfigCase>[
     () => sampleConfig(destinationPath: r'\\server\share\archive.bin'),
   ),
   _ConfigCase('a one-character task id', () => sampleConfig(taskId: 'a')),
-  _ConfigCase(
-    'a 128-character task id',
-    () => sampleConfig(taskId: 'a' * 128),
-  ),
+  _ConfigCase('a 128-character task id', () => sampleConfig(taskId: 'a' * 128)),
   _ConfigCase(
     'dots, underscores, hyphens, and colons in the task id',
     () => sampleConfig(taskId: 'job.1_a-b:c'),
   ),
   _ConfigCase(
     'an authorization header',
-    () => sampleConfig(headers: const <String, String>{'Authorization': 'Bearer token'}),
+    () => sampleConfig(
+      headers: const <String, String>{'Authorization': 'Bearer token'},
+    ),
   ),
   _ConfigCase(
     'a custom request header',
-    () => sampleConfig(headers: const <String, String>{'X-Request-Id': 'abc-123'}),
+    () => sampleConfig(
+      headers: const <String, String>{'X-Request-Id': 'abc-123'},
+    ),
   ),
   _ConfigCase(
     'a single attempt',
@@ -888,13 +1039,22 @@ final List<_ConfigCase> _acceptedConfigs = <_ConfigCase>[
 ];
 
 final List<_ConfigCase> _rejectedConfigs = <_ConfigCase>[
-  _ConfigCase('plain http', () => sampleConfig(url: 'http://cdn.example.com/file.bin')),
+  _ConfigCase(
+    'plain http',
+    () => sampleConfig(url: 'http://cdn.example.com/file.bin'),
+  ),
   _ConfigCase('ftp', () => sampleConfig(url: 'ftp://cdn.example.com/file.bin')),
   _ConfigCase('a file url', () => sampleConfig(url: 'file:///tmp/file.bin')),
   _ConfigCase('an empty url', () => sampleConfig(url: '')),
-  _ConfigCase('a url without a scheme', () => sampleConfig(url: 'cdn.example.com/file.bin')),
+  _ConfigCase(
+    'a url without a scheme',
+    () => sampleConfig(url: 'cdn.example.com/file.bin'),
+  ),
   _ConfigCase('https without a host', () => sampleConfig(url: 'https://')),
-  _ConfigCase('a relative destination', () => sampleConfig(destinationPath: 'archive.bin')),
+  _ConfigCase(
+    'a relative destination',
+    () => sampleConfig(destinationPath: 'archive.bin'),
+  ),
   _ConfigCase('an empty destination', () => sampleConfig(destinationPath: '')),
   _ConfigCase(
     'a destination with a newline',
@@ -935,7 +1095,9 @@ final List<_ConfigCase> _rejectedConfigs = <_ConfigCase>[
   ),
   _ConfigCase(
     'a negative initial backoff',
-    () => sampleConfig(retry: const RetryPolicy(initialBackoff: Duration(seconds: -1))),
+    () => sampleConfig(
+      retry: const RetryPolicy(initialBackoff: Duration(seconds: -1)),
+    ),
   ),
   _ConfigCase(
     'a max backoff below the initial backoff',
@@ -1051,7 +1213,11 @@ final List<_ConfigCase> _rejectedConfigs = <_ConfigCase>[
 final List<_TransitionCase> _transitions = <_TransitionCase>[
   for (final TaskStatus status in TaskStatus.values)
     for (final TaskCommand command in TaskCommand.values)
-      _TransitionCase(status, command, _legal["${status.name}:${command.name}"]),
+      _TransitionCase(
+        status,
+        command,
+        _legal["${status.name}:${command.name}"],
+      ),
 ];
 
 const Map<String, TaskStatus> _legal = <String, TaskStatus>{
@@ -1107,7 +1273,10 @@ Map<Object?, Object?> _completed({
   };
 }
 
-Future<void> _ignoreCallback(int handle, WorkVaultBackgroundEvent event) async {}
+Future<void> _ignoreCallback(
+  int handle,
+  WorkVaultBackgroundEvent event,
+) async {}
 
 final class _ScriptedEngine implements WorkVaultEngine {
   final List<String> calls = <String>[];

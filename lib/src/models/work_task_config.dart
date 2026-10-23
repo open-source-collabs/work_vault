@@ -192,7 +192,9 @@ bool _isAbsolutePath(String path) {
 }
 
 bool _isValidWebDestination(String path) {
-  if (path.isEmpty || _controlCharacters.hasMatch(path) || path.contains('..')) {
+  if (path.isEmpty ||
+      _controlCharacters.hasMatch(path) ||
+      path.contains('..')) {
     return false;
   }
   return true;

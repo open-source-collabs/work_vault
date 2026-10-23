@@ -14,10 +14,8 @@ import 'desktop_download_worker.dart';
 
 /// [WorkVaultEngine] implementation for desktop platforms (Windows, Linux, macOS).
 final class DesktopWorkVaultEngine implements WorkVaultEngine {
-  DesktopWorkVaultEngine({
-    WorkVaultDatabase? database,
-    this.httpClientFactory,
-  }) : _databaseOverride = database;
+  DesktopWorkVaultEngine({WorkVaultDatabase? database, this.httpClientFactory})
+    : _databaseOverride = database;
 
   final WorkVaultDatabase? _databaseOverride;
   final HttpClient Function()? httpClientFactory;

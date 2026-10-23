@@ -122,10 +122,7 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
       _database.execute('DELETE FROM tasks');
     } else {
       final String slots = List<String>.filled(ids.length, '?').join(', ');
-      _database.execute(
-        'DELETE FROM tasks WHERE task_id NOT IN ($slots)',
-        ids,
-      );
+      _database.execute('DELETE FROM tasks WHERE task_id NOT IN ($slots)', ids);
     }
     for (final WorkVaultTaskRecord record in records) {
       project(record);
@@ -161,9 +158,7 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
     final ResultSet rows = _database.select(
       'SELECT * FROM tasks ORDER BY task_id',
     );
-    return <WorkVaultTaskRecord>[
-      for (final Row row in rows) _read(row),
-    ];
+    return <WorkVaultTaskRecord>[for (final Row row in rows) _read(row)];
   }
 
   @override

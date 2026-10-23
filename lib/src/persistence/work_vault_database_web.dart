@@ -14,7 +14,8 @@ WorkVaultDatabase openWorkVaultDatabaseMemory() {
 
 /// In-memory/Web-safe implementation of [WorkVaultDatabase].
 final class WorkVaultDatabaseWeb implements WorkVaultDatabase {
-  final Map<String, WorkVaultTaskRecord> _tasks = <String, WorkVaultTaskRecord>{};
+  final Map<String, WorkVaultTaskRecord> _tasks =
+      <String, WorkVaultTaskRecord>{};
   int? _handlerHandle;
 
   @override
@@ -64,7 +65,8 @@ final class WorkVaultDatabaseWeb implements WorkVaultDatabase {
       totalBytes: record.totalBytes,
       resumptionData: record.resumptionData,
       sha256: existing?.sha256 ?? record.sha256,
-      verificationStatus: existing?.verificationStatus ?? record.verificationStatus,
+      verificationStatus:
+          existing?.verificationStatus ?? record.verificationStatus,
     );
   }
 

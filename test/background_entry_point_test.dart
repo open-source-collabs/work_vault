@@ -7,12 +7,16 @@ void main() {
 
   test('a closure cannot be registered as the background handler', () async {
     await expectLater(
-      WorkVault.registerBackgroundHandler((WorkVaultBackgroundEvent _) async {}),
+      WorkVault.registerBackgroundHandler(
+        (WorkVaultBackgroundEvent _) async {},
+      ),
       throwsArgumentError,
     );
   });
 
-  testWidgets('the headless entry point signals ready', (WidgetTester tester) async {
+  testWidgets('the headless entry point signals ready', (
+    WidgetTester tester,
+  ) async {
     final List<String> methods = <String>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       const MethodChannel(workVaultBackgroundChannel),

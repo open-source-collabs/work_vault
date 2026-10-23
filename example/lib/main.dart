@@ -85,9 +85,9 @@ class _VaultScreenState extends State<VaultScreen> {
       await WorkVault.instance.initialize();
 
       _progressSubscription?.cancel();
-      _progressSubscription = WorkVault.instance
-          .watchProgress(_taskId)
-          .listen((TaskProgress progress) {
+      _progressSubscription = WorkVault.instance.watchProgress(_taskId).listen((
+        TaskProgress progress,
+      ) {
         if (!mounted) {
           return;
         }
@@ -100,13 +100,13 @@ class _VaultScreenState extends State<VaultScreen> {
       _statusSubscription = WorkVault.instance
           .watchStatus(taskId: _taskId)
           .listen((TaskSnapshot snapshot) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {
-          _result = '${snapshot.taskId} is ${snapshot.status.name}.';
-        });
-      });
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _result = '${snapshot.taskId} is ${snapshot.status.name}.';
+            });
+          });
 
       final WorkTaskConfig config = WorkTaskConfig(
         taskId: _taskId,
@@ -149,7 +149,10 @@ class _VaultScreenState extends State<VaultScreen> {
           const SizedBox(height: 4),
           Text(_downloadUrl),
           const SizedBox(height: 4),
-          Text(_destinationPath, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            _destinationPath,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 24),
           if (_progressFraction != null) ...<Widget>[
             LinearProgressIndicator(value: _progressFraction),

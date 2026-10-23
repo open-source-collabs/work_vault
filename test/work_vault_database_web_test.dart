@@ -42,7 +42,11 @@ void main() {
     expect(db.getTask('web-1')?.resumptionData, isNull);
 
     // Record verification
-    db.recordVerification('web-1', Sha256VerificationStatus.verified, sha256: 'deadbeef');
+    db.recordVerification(
+      'web-1',
+      Sha256VerificationStatus.verified,
+      sha256: 'deadbeef',
+    );
     expect(db.getTask('web-1')?.sha256, 'deadbeef');
 
     // Handler handle

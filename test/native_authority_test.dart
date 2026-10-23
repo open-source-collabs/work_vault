@@ -30,20 +30,23 @@ void main() {
   });
 
   group('host projection', () {
-    test('a projection replaces a stale status, byte count, and entity tag', () {
-      database.project(
-        _record(status: 'running', bytes: 10, eTag: '"v1"', total: 100),
-      );
-      database.project(
-        _record(status: 'paused', bytes: 64, eTag: '"v2"', total: 128),
-      );
+    test(
+      'a projection replaces a stale status, byte count, and entity tag',
+      () {
+        database.project(
+          _record(status: 'running', bytes: 10, eTag: '"v1"', total: 100),
+        );
+        database.project(
+          _record(status: 'paused', bytes: 64, eTag: '"v2"', total: 128),
+        );
 
-      final WorkVaultTaskRecord? row = database.getTask('job-1');
-      expect(row?.status, 'paused');
-      expect(row?.downloadedBytes, 64);
-      expect(row?.eTag, '"v2"');
-      expect(row?.totalBytes, 128);
-    });
+        final WorkVaultTaskRecord? row = database.getTask('job-1');
+        expect(row?.status, 'paused');
+        expect(row?.downloadedBytes, 64);
+        expect(row?.eTag, '"v2"');
+        expect(row?.totalBytes, 128);
+      },
+    );
 
     test('a host value that is now unknown clears the stored one', () {
       database.project(
@@ -71,20 +74,25 @@ void main() {
       expect(database.getTask('job-1')?.resumptionData, isNull);
     });
 
-    test('a projection keeps the digest and verification this isolate owns', () async {
-      final File file = await _file('keep.bin', 'abc');
-      await processor.apply(database, _event(file: file, bytes: 3));
-      final String? digest = database.getTask('job-1')?.sha256;
-      expect(digest, isNotNull);
+    test(
+      'a projection keeps the digest and verification this isolate owns',
+      () async {
+        final File file = await _file('keep.bin', 'abc');
+        await processor.apply(database, _event(file: file, bytes: 3));
+        final String? digest = database.getTask('job-1')?.sha256;
+        expect(digest, isNotNull);
 
-      database.project(_record(status: 'completed', bytes: 3, path: file.path));
+        database.project(
+          _record(status: 'completed', bytes: 3, path: file.path),
+        );
 
-      expect(database.getTask('job-1')?.sha256, digest);
-      expect(
-        database.getTask('job-1')?.verificationStatus,
-        Sha256VerificationStatus.verified,
-      );
-    });
+        expect(database.getTask('job-1')?.sha256, digest);
+        expect(
+          database.getTask('job-1')?.verificationStatus,
+          Sha256VerificationStatus.verified,
+        );
+      },
+    );
 
     test('a reload removes tasks the host has forgotten', () async {
       final File file = await _file('reload.bin', 'abc');
@@ -96,9 +104,10 @@ void main() {
         _record(status: 'completed', bytes: 3, path: file.path),
       ]);
 
-      expect(database.getTasks().map((WorkVaultTaskRecord r) => r.taskId), <String>[
-        'job-1',
-      ]);
+      expect(
+        database.getTasks().map((WorkVaultTaskRecord r) => r.taskId),
+        <String>['job-1'],
+      );
       expect(
         database.getTask('job-1')?.verificationStatus,
         Sha256VerificationStatus.verified,
@@ -147,50 +156,59 @@ void main() {
       expect(database.getTask('job-1')?.status, 'completed');
     });
 
-    test('a mismatch is recorded without moving the task off completed', () async {
-      final File file = await _file('drifted.bin', 'abc');
-      await processor.apply(database, _event(file: file, bytes: 3));
-      await file.writeAsString('zzz');
+    test(
+      'a mismatch is recorded without moving the task off completed',
+      () async {
+        final File file = await _file('drifted.bin', 'abc');
+        await processor.apply(database, _event(file: file, bytes: 3));
+        await file.writeAsString('zzz');
 
-      final WorkVaultBackgroundEvent event = await processor.apply(
-        database,
-        _event(file: file, bytes: 3),
-      );
+        final WorkVaultBackgroundEvent event = await processor.apply(
+          database,
+          _event(file: file, bytes: 3),
+        );
 
-      expect(event.status, 'completed');
-      expect(event.verificationStatus, Sha256VerificationStatus.mismatch);
-      expect(event.sha256, _abcDigest);
-      expect(database.getTask('job-1')?.status, 'completed');
-    });
+        expect(event.status, 'completed');
+        expect(event.verificationStatus, Sha256VerificationStatus.mismatch);
+        expect(event.sha256, _abcDigest);
+        expect(database.getTask('job-1')?.status, 'completed');
+      },
+    );
 
-    test('a missing file is recorded without moving the task off completed', () async {
-      final WorkVaultBackgroundEvent event = await processor.apply(
-        database,
-        <Object?, Object?>{
-          'kind': 'status',
-          'taskId': 'job-1',
-          'status': 'completed',
-          'filePath': '${directory.path}${Platform.pathSeparator}absent.bin',
-          'downloadedBytes': 0,
-          'databasePath': ':memory:',
-        },
-      );
+    test(
+      'a missing file is recorded without moving the task off completed',
+      () async {
+        final WorkVaultBackgroundEvent event = await processor.apply(
+          database,
+          <Object?, Object?>{
+            'kind': 'status',
+            'taskId': 'job-1',
+            'status': 'completed',
+            'filePath': '${directory.path}${Platform.pathSeparator}absent.bin',
+            'downloadedBytes': 0,
+            'databasePath': ':memory:',
+          },
+        );
 
-      expect(event.status, 'completed');
-      expect(event.verificationStatus, Sha256VerificationStatus.missing);
-      expect(event.sha256, isNull);
-      expect(database.getTask('job-1')?.status, 'completed');
-    });
+        expect(event.status, 'completed');
+        expect(event.verificationStatus, Sha256VerificationStatus.missing);
+        expect(event.sha256, isNull);
+        expect(database.getTask('job-1')?.status, 'completed');
+      },
+    );
 
-    test('the host digest is the one a first hash is compared against', () async {
-      final File file = await _file('host.bin', 'abc');
-      final WorkVaultBackgroundEvent event = await processor.apply(
-        database,
-        _event(file: file, bytes: 3, sha256: _abcDigest),
-      );
-      expect(event.verificationStatus, Sha256VerificationStatus.verified);
-      expect(event.sha256, _abcDigest);
-    });
+    test(
+      'the host digest is the one a first hash is compared against',
+      () async {
+        final File file = await _file('host.bin', 'abc');
+        final WorkVaultBackgroundEvent event = await processor.apply(
+          database,
+          _event(file: file, bytes: 3, sha256: _abcDigest),
+        );
+        expect(event.verificationStatus, Sha256VerificationStatus.verified);
+        expect(event.sha256, _abcDigest);
+      },
+    );
 
     test('a file that differs from the host digest is a mismatch on the first hash', () async {
       final File file = await _file('wrong.bin', 'zzz');
@@ -326,4 +344,7 @@ Map<Object?, Object?> _event({
   };
 }
 
-Future<void> _ignoreCallback(int handle, WorkVaultBackgroundEvent event) async {}
+Future<void> _ignoreCallback(
+  int handle,
+  WorkVaultBackgroundEvent event,
+) async {}

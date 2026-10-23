@@ -298,24 +298,28 @@ void _rebootCheck() {
 }
 
 void _batteryHold() {
-  testWidgets('a low battery holds requiresBatteryNotLow work until it recovers', (
-    WidgetTester tester,
-  ) async {
-    final File file = _file('battery-hold');
-    await _enqueue(
-      'battery-hold',
-      '/blob',
-      file,
-      battery: const BatteryConstraint(requiresBatteryNotLow: true),
-    );
-    await Future<void>.delayed(const Duration(seconds: 20));
-    final TaskSnapshot? held = await WorkVault.instance.getTask('battery-hold');
-    expect(held?.status, TaskStatus.enqueued);
-    expect(file.existsSync() ? file.lengthSync() : 0, 0);
-    await _marker('battery_held').writeAsString('held', flush: true);
-    await _awaitStatus('battery-hold', TaskStatus.completed);
-    expect(await sha256HexOfFile(file.path), _sha);
-  }, timeout: const Timeout(Duration(minutes: 4)));
+  testWidgets(
+    'a low battery holds requiresBatteryNotLow work until it recovers',
+    (WidgetTester tester) async {
+      final File file = _file('battery-hold');
+      await _enqueue(
+        'battery-hold',
+        '/blob',
+        file,
+        battery: const BatteryConstraint(requiresBatteryNotLow: true),
+      );
+      await Future<void>.delayed(const Duration(seconds: 20));
+      final TaskSnapshot? held = await WorkVault.instance.getTask(
+        'battery-hold',
+      );
+      expect(held?.status, TaskStatus.enqueued);
+      expect(file.existsSync() ? file.lengthSync() : 0, 0);
+      await _marker('battery_held').writeAsString('held', flush: true);
+      await _awaitStatus('battery-hold', TaskStatus.completed);
+      expect(await sha256HexOfFile(file.path), _sha);
+    },
+    timeout: const Timeout(Duration(minutes: 4)),
+  );
 }
 
 void _batteryDrop() {
@@ -341,7 +345,11 @@ void _batteryDrop() {
     await Future<void>.delayed(const Duration(seconds: 5));
     expect(kept, greaterThan(0));
     expect(kept, lessThan(_length));
-    expect(file.lengthSync(), kept, reason: 'bytes kept arriving while stopped');
+    expect(
+      file.lengthSync(),
+      kept,
+      reason: 'bytes kept arriving while stopped',
+    );
     final Future<TaskSnapshot> finished = _awaitStatus(
       'battery-drop',
       TaskStatus.completed,
@@ -389,7 +397,8 @@ void _quota() {
       );
     } finally {
       await statuses.cancel();
-      await _marker('quota_statuses').writeAsString(seen.join(','), flush: true);
+      await _marker('quota_statuses')
+          .writeAsString(seen.join(','), flush: true);
     }
     expect(file.lengthSync(), _length);
     expect(await sha256HexOfFile(file.path), _sha);

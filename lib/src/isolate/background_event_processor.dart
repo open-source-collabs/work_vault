@@ -10,8 +10,9 @@ import '../persistence/work_vault_database.dart';
 ///
 /// The function must be a top-level or static function marked
 /// `@pragma('vm:entry-point')`. A closure cannot be looked up in a new engine.
-typedef WorkVaultBackgroundHandler =
-    Future<void> Function(WorkVaultBackgroundEvent event);
+typedef WorkVaultBackgroundHandler = Future<void> Function(
+  WorkVaultBackgroundEvent event,
+);
 
 /// One host event delivered to Dart while the UI engine is not attached.
 final class WorkVaultBackgroundEvent {
@@ -115,8 +116,10 @@ final class BackgroundEventProcessor {
 }
 
 /// Invokes the user function identified by [handle].
-typedef WorkVaultCallbackInvoker =
-    Future<void> Function(int handle, WorkVaultBackgroundEvent event);
+typedef WorkVaultCallbackInvoker = Future<void> Function(
+  int handle,
+  WorkVaultBackgroundEvent event,
+);
 
 /// Resolves [handle] in this engine and awaits the user function.
 Future<void> invokeWorkVaultCallback(
@@ -187,4 +190,3 @@ Future<_Verification> _verify(
   }
   return (status: Sha256VerificationStatus.verified, sha256: digest);
 }
-

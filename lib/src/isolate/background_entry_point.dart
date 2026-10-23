@@ -71,9 +71,7 @@ final class _HeadlessBackgroundBinding {
         if (arguments is! Map) {
           throw ArgumentError('dispatch payload must be a map.');
         }
-        final Map<Object?, Object?> raw = Map<Object?, Object?>.from(
-          arguments,
-        );
+        final Map<Object?, Object?> raw = Map<Object?, Object?>.from(arguments);
         final WorkVaultDatabase database = _open(raw['databasePath']);
         await _processor.apply(database, raw);
       case 'shutdown':

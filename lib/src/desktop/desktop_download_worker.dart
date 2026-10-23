@@ -100,11 +100,12 @@ final class DesktopDownloadWorker {
           return;
         }
 
-        final int backoffMs = (config.retry.initialBackoff.inMilliseconds *
-                attempt *
-                config.retry.multiplier)
-            .toInt()
-            .clamp(0, config.retry.maxBackoff.inMilliseconds);
+        final int backoffMs =
+            (config.retry.initialBackoff.inMilliseconds *
+                    attempt *
+                    config.retry.multiplier)
+                .toInt()
+                .clamp(0, config.retry.maxBackoff.inMilliseconds);
         await Future<void>.delayed(Duration(milliseconds: backoffMs));
       }
     }
@@ -116,8 +117,14 @@ final class DesktopDownloadWorker {
     String? initialEtag,
   ) async {
     _client = httpClientFactory?.call() ?? HttpClient();
-    _client!.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-    final HttpClientRequest request = await _client!.getUrl(Uri.parse(config.url));
+    _client!.badCertificateCallback = (
+      X509Certificate cert,
+      String host,
+      int port,
+    ) => true;
+    final HttpClientRequest request = await _client!.getUrl(
+      Uri.parse(config.url),
+    );
 
     for (final MapEntry<String, String> header in config.headers.entries) {
       request.headers.set(header.key, header.value);
@@ -133,7 +140,8 @@ final class DesktopDownloadWorker {
     final HttpClientResponse response = await request.close();
     final int statusCode = response.statusCode;
 
-    if (statusCode != HttpStatus.ok && statusCode != HttpStatus.partialContent) {
+    if (statusCode != HttpStatus.ok &&
+        statusCode != HttpStatus.partialContent) {
       final bool retryable = statusCode >= 500 && statusCode < 600;
       _fail(
         code: 'http_$statusCode',
@@ -150,7 +158,9 @@ final class DesktopDownloadWorker {
 
     if (statusCode == HttpStatus.partialContent) {
       _raf = destinationFile.openSync(mode: FileMode.append);
-      final String? contentRange = response.headers.value(HttpHeaders.contentRangeHeader);
+      final String? contentRange = response.headers.value(
+        HttpHeaders.contentRangeHeader,
+      );
       if (contentRange != null && contentRange.contains('/')) {
         final String totalPart = contentRange.split('/').last;
         totalBytes = int.tryParse(totalPart);
@@ -184,7 +194,9 @@ final class DesktopDownloadWorker {
         if (nowMs - lastReportTimeMs >= 200 || downloadedBytes == totalBytes) {
           final int deltaBytes = downloadedBytes - lastReportedBytes;
           final int deltaTimeMs = nowMs - lastReportTimeMs;
-          final double speed = deltaTimeMs > 0 ? (deltaBytes * 1000.0) / deltaTimeMs : 0.0;
+          final double speed = deltaTimeMs > 0
+              ? (deltaBytes * 1000.0) / deltaTimeMs
+              : 0.0;
 
           final double? pct = (totalBytes != null && totalBytes > 0)
               ? (downloadedBytes / totalBytes) * 100.0
@@ -252,7 +264,9 @@ final class DesktopDownloadWorker {
                   bytesDownloaded: downloadedBytes,
                   totalBytes: totalBytes ?? downloadedBytes,
                   bytesPerSecond: 0,
-                  elapsed: Duration(milliseconds: stopwatch.elapsedMilliseconds),
+                  elapsed: Duration(
+                    milliseconds: stopwatch.elapsedMilliseconds,
+                  ),
                   percentage: 100,
                 ),
               ),
@@ -289,9 +303,9 @@ final class DesktopDownloadWorker {
 
     final WorkVaultTaskRecord? current = database.getTask(config.taskId);
     if (current != null) {
-      final Uint8List resumeToken = Uint8List.fromList(
-        <int>[...current.downloadedBytes.toString().codeUnits],
-      );
+      final Uint8List resumeToken = Uint8List.fromList(<int>[
+        ...current.downloadedBytes.toString().codeUnits,
+      ]);
       database.upsert(
         current.copyWith(
           status: TaskStatus.paused.name,
@@ -342,10 +356,7 @@ final class DesktopDownloadWorker {
     );
 
     onStatusChanged(
-      TaskSnapshot(
-        taskId: config.taskId,
-        status: TaskStatus.cancelled,
-      ),
+      TaskSnapshot(taskId: config.taskId, status: TaskStatus.cancelled),
     );
   }
 
