@@ -196,6 +196,19 @@ final class _WebDownloadSession {
   Future<void> start({bool allowRestart = true}) async {
     _isPaused = false;
     _abortController = web.AbortController();
+    final WorkVaultTaskRecord? existing = database.getTask(config.taskId);
+    final int? totalBytes = existing?.totalBytes;
+    database.upsert(
+      WorkVaultTaskRecord(
+        taskId: config.taskId,
+        status: TaskStatus.running.name,
+        filePath: config.destinationPath,
+        downloadedBytes: _buffer.length,
+        totalBytes: totalBytes,
+        eTag: _eTag,
+        verificationStatus: Sha256VerificationStatus.pending,
+      ),
+    );
     onStatusChanged(
       TaskSnapshot(
         taskId: config.taskId,
