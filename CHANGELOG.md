@@ -1,3 +1,10 @@
+## 0.3.2
+
+* Web: Persist `TaskStatus.running` to the task store on `start` and `resume` so `getTask` immediately reflects the active state.
+* Update `pigeon` to 29.0.11 and regenerate typed platform IPC bindings for Dart, Kotlin, and Swift.
+* Move browser test suites to `test/web/` for consistent CLI and CI test execution.
+* Synchronize example lockfile with root package version.
+
 ## 0.3.1
 
 * Android: Update `kotlin-gradle-plugin` to 2.4.21. Keep `androidx.core:core-ktx` on 1.16.0 for Android API 36 compatibility.
