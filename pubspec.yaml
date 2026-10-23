@@ -1,6 +1,6 @@
 name: work_vault
 description: "Resumable HTTPS GET downloads for Flutter across Android, iOS, macOS, Windows, Linux, and Web."
-version: 0.3.0
+version: 0.3.1
 repository: https://github.com/open-source-collabs/work_vault
 issue_tracker: https://github.com/open-source-collabs/work_vault/issues
 topics:

@@ -1,3 +1,7 @@
+## 0.3.1
+
+* Android: Update `androidx.core:core-ktx` to 1.19.1 and `kotlin-gradle-plugin` to 2.4.21.
+
 ## 0.3.0
 
 * Add macOS support. It uses the desktop engine, which already selected itself on macOS but was never declared or tested. The README documents the `com.apple.security.network.client` entitlement a sandboxed app needs.
