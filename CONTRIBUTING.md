@@ -15,7 +15,7 @@ flutter test --platform chrome test_web
 - Add or update tests. Resume, ETag change, and checksum paths need a test on
   every platform you touch.
 - If you change `pigeons/messages.dart`, regenerate and commit the bindings:
-  `dart run pigeon --input pigeons/messages.dart`. CI fails on drift.
+  `dart run pigeon --input pigeons/messages.dart `dart run pigeon --input pigeons/messages.dart`. CI fails on drift.`dart run pigeon --input pigeons/messages.dart`. CI fails on drift. dart format lib/src/gen/messages.g.dart`. Pigeon is pinned in `pubspec.yaml`; CI fails if the committed bindings drift.
 - Add a CHANGELOG entry for user-visible changes.
 
 ## Platform contract
