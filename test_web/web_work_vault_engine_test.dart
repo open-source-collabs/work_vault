@@ -71,6 +71,32 @@ void main() {
 
     final List<TaskSnapshot> tasks = await engine.getTasks();
     expect(tasks.length, 2);
-    expect(tasks.map((t) => t.taskId), containsAll(<String>['web-task-a', 'web-task-b']));
+    expect(
+      tasks.map((t) => t.taskId),
+      containsAll(<String>['web-task-a', 'web-task-b']),
+    );
   });
+  test(
+    'resume continues a paused task and ignores one that is not paused',
+    () async {
+      await engine.enqueue(
+        sampleConfig(taskId: 'web-task-3', destinationPath: 'c.bin'),
+      );
+      await engine.pause('web-task-3');
+      expect((await engine.getTask('web-task-3'))?.status, TaskStatus.paused);
+
+      await engine.resume('web-task-3');
+      expect(
+        (await engine.getTask('web-task-3'))?.status,
+        isNot(TaskStatus.paused),
+      );
+
+      await engine.cancel('web-task-3');
+      await engine.resume('web-task-3');
+      expect(
+        (await engine.getTask('web-task-3'))?.status,
+        TaskStatus.cancelled,
+      );
+    },
+  );
 }

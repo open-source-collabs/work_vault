@@ -12,11 +12,12 @@ import '../models/task_snapshot.dart';
 import '../models/task_status.dart';
 import '../models/work_task_config.dart';
 import '../persistence/work_vault_database.dart';
+import 'range_resume.dart';
 
 /// [WorkVaultEngine] implementation for Web environments.
 final class WebWorkVaultEngine implements WorkVaultEngine {
   WebWorkVaultEngine({WorkVaultDatabase? database})
-      : _database = database ?? WorkVaultDatabase.memory();
+    : _database = database ?? WorkVaultDatabase.memory();
 
   final WorkVaultDatabase _database;
   WorkVaultObserver? _observer;
@@ -76,7 +77,8 @@ final class WebWorkVaultEngine implements WorkVaultEngine {
 
   @override
   Future<void> pause(String taskId) async {
-    final _WebDownloadSession? session = _sessions.remove(taskId);
+    // The session stays registered so [resume] can continue from its buffer.
+    final _WebDownloadSession? session = _sessions[taskId];
     if (session != null) {
       await session.pause();
     } else {
@@ -90,7 +92,7 @@ final class WebWorkVaultEngine implements WorkVaultEngine {
   @override
   Future<void> resume(String taskId) async {
     final WorkVaultTaskRecord? record = _database.getTask(taskId);
-    if (record == null) {
+    if (record == null || record.status != TaskStatus.paused.name) {
       return;
     }
 
@@ -99,14 +101,15 @@ final class WebWorkVaultEngine implements WorkVaultEngine {
       return;
     }
 
-    final _WebDownloadSession session = _WebDownloadSession(
-      config: config,
-      database: _database,
-      onProgress: (TaskProgress progress) => _observer?.onProgress(progress),
-      onStatusChanged: (TaskSnapshot snapshot) =>
-          _observer?.onStatusChanged(snapshot),
-    );
-    _sessions[taskId] = session;
+    final _WebDownloadSession session = _sessions[taskId] ??=
+        _WebDownloadSession(
+          config: config,
+          database: _database,
+          onProgress: (TaskProgress progress) =>
+              _observer?.onProgress(progress),
+          onStatusChanged: (TaskSnapshot snapshot) =>
+              _observer?.onStatusChanged(snapshot),
+        );
     unawaited(session.start());
   }
 
@@ -184,11 +187,14 @@ final class _WebDownloadSession {
   final void Function(TaskSnapshot snapshot) onStatusChanged;
 
   final List<int> _buffer = <int>[];
+  String? _eTag;
   bool _isPaused = false;
   bool _isCancelled = false;
   web.AbortController? _abortController;
 
-  Future<void> start() async {
+  /// Starts the transfer, or continues it from the buffered prefix.
+  Future<void> start({bool allowRestart = true}) async {
+    _isPaused = false;
     _abortController = web.AbortController();
     onStatusChanged(
       TaskSnapshot(
@@ -206,13 +212,33 @@ final class _WebDownloadSession {
     );
 
     try {
+      final int offset = _buffer.length;
+      final web.Headers requestHeaders = web.Headers();
+      final Map<String, String> headers = <String, String>{
+        ...config.headers,
+        ...resumeRequestHeaders(offset, eTag: _eTag),
+      };
+      headers.forEach((String name, String value) {
+        requestHeaders.append(name, value);
+      });
+
       final web.RequestInit init = web.RequestInit(
         method: 'GET',
+        headers: requestHeaders,
         signal: _abortController!.signal,
       );
 
-      final web.Response response =
-          await web.window.fetch(config.url.toJS, init).toDart;
+      final web.Response response = await web.window
+          .fetch(config.url.toJS, init)
+          .toDart;
+
+      if (response.status == 416 && offset > 0 && allowRestart) {
+        // The server no longer has the range we hold: start over once.
+        _buffer.clear();
+        _eTag = null;
+        await start(allowRestart: false);
+        return;
+      }
 
       if (!response.ok) {
         _fail(
@@ -223,9 +249,21 @@ final class _WebDownloadSession {
         return;
       }
 
+      // 206 continues the buffered prefix. Any other success replaces it.
+      final bool continued = response.status == 206 && offset > 0;
+      if (!continued) {
+        _buffer.clear();
+      }
+      _eTag = response.headers.get('etag') ?? (continued ? _eTag : null);
+
       final String? lengthHeader = response.headers.get('content-length');
-      final int? totalBytes =
-          lengthHeader != null ? int.tryParse(lengthHeader) : null;
+      final int? bodyLength = lengthHeader != null
+          ? int.tryParse(lengthHeader)
+          : null;
+      final int? totalBytes = continued
+          ? parseContentRangeTotal(response.headers.get('content-range')) ??
+                (bodyLength != null ? offset + bodyLength : null)
+          : bodyLength;
 
       final web.ReadableStream? body = response.body;
       if (body == null) {
@@ -237,11 +275,12 @@ final class _WebDownloadSession {
           body.getReader() as web.ReadableStreamDefaultReader;
       final Stopwatch stopwatch = Stopwatch()..start();
       int lastReportTimeMs = 0;
-      int lastReportedBytes = 0;
+      int lastReportedBytes = _buffer.length;
 
       while (!_isPaused && !_isCancelled) {
-        final web.ReadableStreamReadResult chunkResult =
-            await reader.read().toDart;
+        final web.ReadableStreamReadResult chunkResult = await reader
+            .read()
+            .toDart;
 
         if (chunkResult.done) {
           break;
@@ -255,8 +294,9 @@ final class _WebDownloadSession {
         if (nowMs - lastReportTimeMs >= 200 || _buffer.length == totalBytes) {
           final int deltaBytes = _buffer.length - lastReportedBytes;
           final int deltaTimeMs = nowMs - lastReportTimeMs;
-          final double speed =
-              deltaTimeMs > 0 ? (deltaBytes * 1000.0) / deltaTimeMs : 0.0;
+          final double speed = deltaTimeMs > 0
+              ? (deltaBytes * 1000.0) / deltaTimeMs
+              : 0.0;
           final double? pct = (totalBytes != null && totalBytes > 0)
               ? (_buffer.length / totalBytes) * 100.0
               : null;
@@ -310,6 +350,7 @@ final class _WebDownloadSession {
 
         // Trigger browser save
         _triggerBrowserDownload(config.destinationPath, allBytes);
+        _buffer.clear();
       }
     } catch (error) {
       if (!_isPaused && !_isCancelled) {
@@ -327,14 +368,12 @@ final class _WebDownloadSession {
         status: TaskStatus.paused.name,
         filePath: config.destinationPath,
         downloadedBytes: _buffer.length,
+        eTag: _eTag,
         verificationStatus: Sha256VerificationStatus.pending,
       ),
     );
     onStatusChanged(
-      TaskSnapshot(
-        taskId: config.taskId,
-        status: TaskStatus.paused,
-      ),
+      TaskSnapshot(taskId: config.taskId, status: TaskStatus.paused),
     );
   }
 
@@ -353,10 +392,7 @@ final class _WebDownloadSession {
       clearResumption: true,
     );
     onStatusChanged(
-      TaskSnapshot(
-        taskId: config.taskId,
-        status: TaskStatus.cancelled,
-      ),
+      TaskSnapshot(taskId: config.taskId, status: TaskStatus.cancelled),
     );
   }
 
@@ -388,7 +424,9 @@ final class _WebDownloadSession {
   void _triggerBrowserDownload(String destinationPath, Uint8List bytes) {
     try {
       final String filename = destinationPath.split('/').last.split(r'\').last;
-      final web.Blob blob = web.Blob(<web.BlobPart>[bytes.toJS as web.BlobPart].toJS);
+      final web.Blob blob = web.Blob(
+        <web.BlobPart>[bytes.toJS as web.BlobPart].toJS,
+      );
       final String url = web.URL.createObjectURL(blob);
       final web.HTMLAnchorElement anchor =
           web.document.createElement('a') as web.HTMLAnchorElement;
