@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:work_vault/src/isolate/background_event_processor.dart';
 import 'package:work_vault/src/persistence/work_vault_database.dart';
 
@@ -135,6 +136,75 @@ void main() {
     );
     expect(event.verificationStatus, Sha256VerificationStatus.missing);
     expect(event.sha256, isNull);
+  });
+
+  group('schema version', () {
+    late Directory directory;
+
+    setUp(() {
+      directory = Directory.systemTemp.createTempSync('work_vault_schema');
+    });
+
+    tearDown(() {
+      directory.deleteSync(recursive: true);
+    });
+
+    int storedVersion(String path) {
+      final sqlite.Database raw = sqlite.sqlite3.open(path);
+      try {
+        return raw.select('PRAGMA user_version').first.values.first! as int;
+      } finally {
+        raw.close();
+      }
+    }
+
+    test('a new file is stamped with version 1', () {
+      final String path = '${directory.path}/new.db';
+      WorkVaultDatabase.openFile(path).close();
+
+      expect(storedVersion(path), 1);
+    });
+
+    test('a file written before versioning keeps its rows and is stamped', () {
+      final String path = '${directory.path}/legacy.db';
+      final sqlite.Database raw = sqlite.sqlite3.open(path);
+      raw
+        ..execute('''
+          CREATE TABLE tasks (
+            task_id TEXT PRIMARY KEY NOT NULL,
+            status TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            etag TEXT,
+            downloaded_bytes INTEGER NOT NULL,
+            total_bytes INTEGER,
+            resumption_data BLOB,
+            sha256 TEXT,
+            verification_status TEXT NOT NULL
+          )
+          ''')
+        ..execute(
+          "INSERT INTO tasks VALUES ('old', 'paused', '/tmp/a.bin', NULL, 5, "
+          "NULL, NULL, NULL, 'pending')",
+        )
+        ..close();
+
+      final WorkVaultDatabase database = WorkVaultDatabase.openFile(path);
+      final WorkVaultTaskRecord? row = database.getTask('old');
+      database.close();
+
+      expect(row?.downloadedBytes, 5);
+      expect(storedVersion(path), 1);
+    });
+
+    test('a file from a newer version is refused', () {
+      final String path = '${directory.path}/newer.db';
+      sqlite.sqlite3.open(path)
+        ..execute('PRAGMA user_version = 2')
+        ..close();
+
+      expect(() => WorkVaultDatabase.openFile(path), throwsStateError);
+      expect(storedVersion(path), 2);
+    });
   });
 }
 

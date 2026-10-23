@@ -173,9 +173,7 @@ internal object WorkVaultRuntime {
         if (!inserted) {
             throw duplicate(config.taskId)
         }
-        if (!isTusUpload(config)) {
-            File(config.destinationPath).takeIf { it.isFile }?.delete()
-        }
+        File(config.destinationPath).takeIf { it.isFile }?.delete()
         try {
             WorkVaultScheduler.enqueueNew(context, config)
         } catch (error: Exception) {
@@ -210,9 +208,7 @@ internal object WorkVaultRuntime {
     suspend fun cancel(context: Context, taskId: String) {
         requireInitialized()
         val updated = command(context, taskId, TaskCommand.CANCEL, stopWork = true)
-        if (!isTusUpload(updated.config)) {
-            File(updated.config.destinationPath).takeIf { it.isFile }?.delete()
-        }
+        File(updated.config.destinationPath).takeIf { it.isFile }?.delete()
         val cleared = updated.copy(bytesDownloaded = 0L, totalBytes = null, bytesPerSecond = 0.0)
         WorkVaultStore.put(context, cleared)
         emitStatus(context, cleared)
@@ -259,8 +255,6 @@ internal object WorkVaultRuntime {
                     etag = update.etag ?: current.etag,
                     expectedSha256 = update.expectedSha256 ?: current.expectedSha256,
                     expectedMd5 = update.expectedMd5 ?: current.expectedMd5,
-                    tusLocation = update.tusLocation ?: current.tusLocation,
-                    uploadOffset = update.uploadOffset ?: current.uploadOffset,
                 )
             }
         } ?: return

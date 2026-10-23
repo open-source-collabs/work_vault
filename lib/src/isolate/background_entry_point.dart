@@ -62,7 +62,8 @@ Future<void> registerWorkVaultBackgroundHandler(
 
 final class _HeadlessBackgroundBinding {
   final BackgroundEventProcessor _processor = const BackgroundEventProcessor();
-  WorkVaultDatabase? _database;
+  final Map<String, WorkVaultDatabase> _databases =
+      <String, WorkVaultDatabase>{};
 
   Future<void> handle(MethodCall call) async {
     switch (call.method) {
@@ -75,23 +76,19 @@ final class _HeadlessBackgroundBinding {
         final WorkVaultDatabase database = _open(raw['databasePath']);
         await _processor.apply(database, raw);
       case 'shutdown':
-        _database?.close();
-        _database = null;
+        for (final WorkVaultDatabase database in _databases.values) {
+          database.close();
+        }
+        _databases.clear();
       default:
         throw MissingPluginException();
     }
   }
 
   WorkVaultDatabase _open(Object? path) {
-    final WorkVaultDatabase? existing = _database;
-    if (existing != null) {
-      return existing;
-    }
     if (path is! String || path.isEmpty) {
       throw ArgumentError('dispatch payload is missing databasePath.');
     }
-    final WorkVaultDatabase database = WorkVaultDatabase.openFile(path);
-    _database = database;
-    return database;
+    return _databases[path] ??= WorkVaultDatabase.openFile(path);
   }
 }

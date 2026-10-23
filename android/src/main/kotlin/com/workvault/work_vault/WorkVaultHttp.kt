@@ -13,8 +13,6 @@ internal data class TransferProgressUpdate(
     val etag: String?,
     val expectedSha256: String?,
     val expectedMd5: String?,
-    val tusLocation: String? = null,
-    val uploadOffset: Long? = null,
 )
 
 internal class TransferException(

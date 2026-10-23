@@ -1,7 +1,6 @@
 name: work_vault
-description: "Resumable HTTPS GET downloads for Flutter across Android, iOS, Windows, Linux, and Web."
-version: 0.2.0
-homepage: https://pub.dev/packages/work_vault
+description: "Resumable HTTPS GET downloads for Flutter across Android, iOS, macOS, Windows, Linux, and Web."
+version: 0.3.0
 repository: https://github.com/open-source-collabs/work_vault
 issue_tracker: https://github.com/open-source-collabs/work_vault/issues
 topics:
@@ -9,12 +8,24 @@ topics:
   - network
   - files
 
+screenshots:
+  - description: 'How work_vault works: a typed Dart control plane over WorkManager, background URLSession, desktop streaming and web, sharing one SQLite file.'
+    path: screenshots/how-it-works.png
+  - description: 'The six task statuses and the legal pause, resume and cancel transitions.'
+    path: screenshots/lifecycle.png
+  - description: 'Quickstart: initialize, enqueue a resumable download, and watch its progress.'
+    path: screenshots/quickstart.png
+
+false_secrets:
+  - example/tool/certs/key.pem
+
 environment:
-  sdk: ^3.13.4
+  sdk: ^3.13.0
   flutter: '>=3.47.0'
 
 dependencies:
   crypto: ^3.0.7
+  meta: ^1.19.0
   flutter:
     sdk: flutter
   flutter_web_plugins:
@@ -37,6 +48,8 @@ flutter:
         pluginClass: WorkVaultPlugin
       ios:
         pluginClass: WorkVaultPlugin
+      macos:
+        dartPluginClass: WorkVaultMacOS
       windows:
         dartPluginClass: WorkVaultWindows
       linux:

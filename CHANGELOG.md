@@ -1,9 +1,16 @@
-## Unreleased
+## 0.3.0
 
+* Add macOS support. It uses the desktop engine, which already selected itself on macOS but was never declared or tested. The README documents the `com.apple.security.network.client` entitlement a sandboxed app needs.
+* Fix `WorkVault.enqueue` overwriting a newer status. A host that starts work immediately, such as the desktop engine, reports `running` before `enqueue` returns its `enqueued` snapshot, and the vault then showed `enqueued` while bytes were flowing, so `pause` was rejected as an illegal transition.
+* Web: `resume` continues a paused download with `Range`/`If-Range` instead of refetching from byte 0, restarts on a changed `ETag` or `416`, and sends `WorkTaskConfig.headers` (previously ignored on web).
 * Add CI (analyze, format, unit, web, Android, iOS, Pigeon drift), Dependabot, issue and PR templates, `SECURITY.md`, and `CONTRIBUTING.md`.
 * Document per-platform guarantees in the README.
 * Format the Dart sources with `dart format`.
-* Web: `resume` continues a paused download with `Range`/`If-Range` instead of refetching from byte 0, restarts on a changed `ETag` or `416`, and sends `WorkTaskConfig.headers` (previously ignored on web).
+* The example app builds and runs on macOS, and its end-to-end test uses a unique task id per run, because the desktop task store persists between runs.
+
+## 0.2.1
+
+* Add screenshots to the pub.dev listing: how it works, the task lifecycle, and a quickstart.
 
 ## 0.2.0
 
@@ -12,6 +19,18 @@
 * Add `WebWorkVaultEngine` (`flutter_web_plugins`) for Web with Fetch/Streams API chunk streaming, progress observation, web database persistence, SHA-256 checks, and automatic browser file download triggers.
 * Implement web-safe abstractions and conditional imports across storage and file hashing layers to prevent `dart:io` compilation errors on Web.
 * Scaffold native runners for Windows, Linux, and Web in the `example/` application with dynamic cross-platform destination paths.
+* Fix every Flutter app build failing in the generated plugin registrant: `WorkVaultLinux` and `WorkVaultWindows` are now exported from `package:work_vault/work_vault.dart`, which is where the registrant imports them from. The export is skipped on web.
+* Carry the schema version and close-on-error handling into the IO database implementation introduced for desktop support.
+* Add iOS tests for retry exhaustion, cancel cleanup, battery gating, and the network-constraint mapping. The cellular and expensive-path settings now come from one function that the background session configuration uses.
+* Fix the iOS plugin not compiling: `WorkVaultSessionManager.read` now rethrows, so a lookup of an unknown task reports `task_not_found` instead of failing the build.
+* Document how to run the Dart, Android, and iOS test suites.
+* Add Android tests that pin entity-tag restart, redirect limits, cleartext refusal, timeouts, and retryable HTTP statuses.
+* Record a schema version in the shared SQLite file. A file written by 0.1.0 keeps its rows, and a file from a newer version is refused with a `StateError` instead of being misread.
+* Fix the headless background engine reusing the first database it opened. Each dispatched event is now written to the database its payload names.
+* Remove the Android TUS upload handler. Version 1 runs resumable HTTPS GET only, so native routing and validation now reject every other method, with or without upload protocol headers.
+* Fix Android so an expected digest passed in `X-Work-Vault-Sha256` or `X-Work-Vault-Md5` is no longer replaced by the server's `Digest` or `Content-MD5` response header. A server digest is used only when none was supplied, including when a stored task is resumed.
+* Document expected-digest verification, including that iOS does not read these headers yet.
+* Lower the Dart SDK constraint to `^3.13.0` so it matches the documented minimum of Dart 3.13 and Flutter 3.47. The previous `^3.13.4` required Flutter 3.47.7.
 
 ## 0.1.0
 

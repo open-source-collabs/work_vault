@@ -49,8 +49,8 @@ internal class ResumableEngine(
         var rangeHonored = record.acceptsRanges != false
         var reportedRanges: Boolean? = record.acceptsRanges
         var etag = record.etag
-        var responseSha = record.expectedSha256 ?: expectedSha
-        var responseMd5 = record.expectedMd5 ?: expectedMd5
+        var responseSha = resolveExpectedDigest(expectedSha, null, record.expectedSha256)
+        var responseMd5 = resolveExpectedDigest(expectedMd5, null, record.expectedMd5)
         val runStarted = SystemClock.elapsedRealtime()
         var lastTick = runStarted
         var lastBytes = offset
@@ -80,8 +80,16 @@ internal class ResumableEngine(
                         val observedEtag = normalizeEntityTag(connection.getHeaderField("ETag")) ?: etag
                         val contentRange = parseContentRange(connection.getHeaderField("Content-Range"))
                         val accept = connection.getHeaderField("Accept-Ranges")
-                        responseSha = sha256HexFromDigestHeader(connection.getHeaderField("Digest")) ?: responseSha
-                        responseMd5 = md5HexFromContentMd5(connection.getHeaderField("Content-MD5")) ?: responseMd5
+                        responseSha = resolveExpectedDigest(
+                            expectedSha,
+                            sha256HexFromDigestHeader(connection.getHeaderField("Digest")),
+                            responseSha,
+                        )
+                        responseMd5 = resolveExpectedDigest(
+                            expectedMd5,
+                            md5HexFromContentMd5(connection.getHeaderField("Content-MD5")),
+                            responseMd5,
+                        )
                         when (acceptsByteRanges(accept)) {
                             true -> {
                                 rangeHonored = true

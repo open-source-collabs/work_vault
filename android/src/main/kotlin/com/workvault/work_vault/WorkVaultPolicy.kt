@@ -41,18 +41,16 @@ internal enum class TaskCommand {
 /** Execution path chosen for a stored task. Version 1 runs resumable HTTPS GET only. */
 internal enum class TransferKind {
     RESUMABLE_GET,
-    TUS_UPLOAD,
     UNSUPPORTED,
 }
 
 /**
  * Routes a stored config to the engine that may run it.
  *
- * The method check is the only gate: a GET never reaches the TUS handler, and a verb the
- * download engine cannot resume never reaches [ResumableEngine].
+ * The method check is the only gate: a verb the download engine cannot resume never reaches
+ * [ResumableEngine].
  */
 internal fun transferKind(config: WorkTaskConfig): TransferKind = when {
-    isTusUpload(config) -> TransferKind.TUS_UPLOAD
     config.method == HttpMethod.GET -> TransferKind.RESUMABLE_GET
     else -> TransferKind.UNSUPPORTED
 }
@@ -192,7 +190,7 @@ internal fun validateConfig(config: WorkTaskConfig): String? {
     if (!isAbsolutePath(config.destinationPath)) {
         return "destinationPath must be an absolute file path."
     }
-    if (config.method != HttpMethod.GET && !isTusUpload(config)) {
+    if (config.method != HttpMethod.GET) {
         return "Only GET downloads are supported in this version."
     }
     for ((name, value) in config.headers) {

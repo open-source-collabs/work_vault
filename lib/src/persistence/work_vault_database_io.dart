@@ -27,7 +27,13 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
   factory WorkVaultDatabaseIO.openFile(String path) {
     final Directory parent = File(path).parent;
     parent.createSync(recursive: true);
-    return WorkVaultDatabaseIO._(sqlite3.open(path));
+    final Database database = sqlite3.open(path);
+    try {
+      return WorkVaultDatabaseIO._(database);
+    } on Object {
+      database.close();
+      rethrow;
+    }
   }
 
   /// Opens a private in-memory database for tests.
@@ -190,6 +196,14 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
   }
 
   void _ensureSchema() {
+    final int stored =
+        _database.select('PRAGMA user_version').first.values.first! as int;
+    if (stored > _schemaVersion) {
+      throw StateError(
+        'The work_vault database is schema version $stored, but this version '
+        'of work_vault understands up to $_schemaVersion. Update the package.',
+      );
+    }
     _database
       ..execute('PRAGMA busy_timeout = 4000')
       ..execute('''
@@ -210,7 +224,8 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
           key TEXT PRIMARY KEY NOT NULL,
           value TEXT NOT NULL
         )
-        ''');
+        ''')
+      ..execute('PRAGMA user_version = $_schemaVersion');
   }
 
   WorkVaultTaskRecord _read(Row row) {
@@ -241,3 +256,7 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
 }
 
 const String _handlerKey = 'background_handler';
+
+/// Version of the table layout. Files written before versioning read as 0 and
+/// share this layout, so they are stamped without migration.
+const int _schemaVersion = 1;

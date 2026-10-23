@@ -65,6 +65,22 @@ final class RunnerTests: XCTestCase {
     XCTAssertEqual(manager.task(taskId: "job-1")?.status, .cancelled)
   }
 
+  func testCommandsOnAnUnknownTaskReportNotFound() async throws {
+    do {
+      try await manager.pause(taskId: "missing")
+      XCTFail("Expected task not found")
+    } catch let error as WorkVaultError {
+      XCTAssertEqual(error.code, workVaultTaskNotFound)
+    }
+
+    do {
+      try await manager.cancel(taskId: "missing")
+      XCTFail("Expected task not found")
+    } catch let error as WorkVaultError {
+      XCTAssertEqual(error.code, workVaultTaskNotFound)
+    }
+  }
+
   func testRetryableFailureRequeuesAndCompletedStaysCompleted() async throws {
     let snapshot = try await manager.enqueue(try sampleConfig())
     XCTAssertEqual(snapshot.status, .running)
@@ -77,6 +93,65 @@ final class RunnerTests: XCTestCase {
     manager.testing_markCompleted(taskId: "job-1", bytes: 4)
     manager.testing_recordFailure(taskId: "job-1", retryable: true)
     XCTAssertEqual(manager.task(taskId: "job-1")?.status, .completed)
+  }
+
+  func testRetriesStopAtMaxAttemptsAndTheTaskEndsFailed() async throws {
+    var record = StoredTask(config: try sampleConfig())
+    record.status = TaskStatus.running.wire
+    record.attempt = record.maxAttempts
+    manager.testing_seed(record)
+
+    manager.testing_recordFailure(taskId: "job-1", retryable: true)
+
+    let failed = manager.task(taskId: "job-1")
+    XCTAssertEqual(failed?.status, .failed)
+    XCTAssertEqual(failed?.failure?.retryable, false)
+  }
+
+  func testCancelRemovesResumeDataAndPartialFile() async throws {
+    _ = try await manager.enqueue(try sampleConfig(taskId: "job:1"))
+    let resume = directory.appendingPathComponent("resume/job_1.resume")
+    let partial = directory.appendingPathComponent("staging/job_1.partial")
+    try Data([1, 2, 3]).write(to: resume)
+    try Data([4, 5, 6]).write(to: partial)
+
+    try await manager.cancel(taskId: "job:1")
+
+    XCTAssertEqual(manager.task(taskId: "job:1")?.status, .cancelled)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: resume.path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
+  }
+
+  func testBatteryConditionsKeepATaskFromStartingUntilTheyHold() throws {
+    var charging = StoredTask(config: try sampleConfig())
+    charging.requiresCharging = true
+    var notLow = StoredTask(config: try sampleConfig())
+    notLow.requiresBatteryNotLow = true
+    let plain = StoredTask(config: try sampleConfig())
+    let unplugged = WorkVaultPower.State(isCharging: false, isLowPower: false)
+    let lowPower = WorkVaultPower.State(isCharging: true, isLowPower: true)
+    let ready = WorkVaultPower.State(isCharging: true, isLowPower: false)
+
+    XCTAssertFalse(WorkVaultRules.allowsStart(charging, power: unplugged))
+    XCTAssertTrue(WorkVaultRules.allowsStart(charging, power: ready))
+    XCTAssertFalse(WorkVaultRules.allowsStart(notLow, power: lowPower))
+    XCTAssertTrue(WorkVaultRules.allowsStart(notLow, power: unplugged))
+    XCTAssertTrue(WorkVaultRules.allowsStart(plain, power: unplugged))
+  }
+
+  func testNetworkConstraintsMapToSessionAccess() {
+    let any = WorkVaultRules.networkAccess(for: .any)
+    XCTAssertTrue(any.allowsCellular)
+    XCTAssertTrue(any.allowsExpensive)
+
+    let unmetered = WorkVaultRules.networkAccess(for: .unmetered)
+    XCTAssertFalse(unmetered.allowsCellular)
+    XCTAssertFalse(unmetered.allowsExpensive)
+
+    // iOS has no roaming signal; an expensive path is the closest equivalent.
+    let notRoaming = WorkVaultRules.networkAccess(for: .notRoaming)
+    XCTAssertTrue(notRoaming.allowsCellular)
+    XCTAssertFalse(notRoaming.allowsExpensive)
   }
 
   func testIntegritySweepMarksATruncatedFileFailed() async throws {

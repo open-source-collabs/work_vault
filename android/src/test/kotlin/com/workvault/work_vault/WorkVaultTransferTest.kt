@@ -81,16 +81,8 @@ internal class WorkVaultTransferTest {
     }
 
     @Test
-    fun tusMetadataAndChecksumFramingRoundTrip() {
-        val encoded = encodeTusMetadata(mapOf("filename" to "report.bin"))
-        assertEquals("report.bin", parseTusMetadata(encoded)["filename"])
-        assertEquals(setOf("creation", "checksum"), parseListHeader("creation, checksum"))
-        assertEquals(128L, parseUploadOffset("128"))
-        assertNull(parseUploadOffset("-1"))
-
+    fun digestHeadersRoundTripToHex() {
         val digest = MessageDigest.getInstance("SHA-256").digest("abc".toByteArray())
-        val header = uploadChecksumHeader("sha256", digest)
-        assertEquals("sha256 ${Base64.getEncoder().encodeToString(digest)}", header)
         assertEquals(digest.toHex(), sha256HexFromDigestHeader("sha-256=:${headerBase64(digest)}:"))
         assertEquals(digest.toHex(), sha256HexFromDigestHeader("sha-256=${headerBase64(digest)}"))
         val md5 = MessageDigest.getInstance("MD5").digest(ByteArray(0))
@@ -98,16 +90,29 @@ internal class WorkVaultTransferTest {
     }
 
     @Test
-    fun tusUploadsAreLimitedToPostOrPutWithProtocolHeaders() {
-        assertTrue(isTusUpload(transferConfig(HttpMethod.POST, mapOf("Tus-Resumable" to "1.0.0"))))
-        assertTrue(isTusUpload(transferConfig(HttpMethod.PUT, mapOf("Upload-Metadata" to "filename YQ=="))))
-        assertFalse(isTusUpload(transferConfig(HttpMethod.POST, emptyMap())))
-        assertFalse(isTusUpload(transferConfig(HttpMethod.GET, mapOf("Tus-Resumable" to "1.0.0"))))
-        assertNull(validateConfig(transferConfig(HttpMethod.POST, mapOf("Tus-Resumable" to "1.0.0"))))
-        assertEquals(
-            "Only GET downloads are supported in this version.",
-            validateConfig(transferConfig(HttpMethod.POST, emptyMap())),
-        )
+    fun onlyGetIsAcceptedEvenWithUploadProtocolHeaders() {
+        val message = "Only GET downloads are supported in this version."
+        assertEquals(message, validateConfig(transferConfig(HttpMethod.POST, mapOf("Tus-Resumable" to "1.0.0"))))
+        assertEquals(message, validateConfig(transferConfig(HttpMethod.PUT, mapOf("Upload-Metadata" to "filename YQ=="))))
+        assertEquals(message, validateConfig(transferConfig(HttpMethod.POST, emptyMap())))
+        assertNull(validateConfig(transferConfig(HttpMethod.GET, mapOf("Tus-Resumable" to "1.0.0"))))
+    }
+
+    @Test
+    fun aDigestTheCallerSuppliedIsNotReplacedByTheServer() {
+        val supplied = "ab".repeat(32)
+        val fromServer = "cd".repeat(32)
+        assertEquals(supplied, resolveExpectedDigest(supplied, fromServer, null))
+        assertEquals(supplied, resolveExpectedDigest(supplied, null, fromServer))
+    }
+
+    @Test
+    fun aServerDigestIsUsedOnlyWhenTheCallerSuppliedNone() {
+        val fromServer = "cd".repeat(32)
+        val earlier = "ef".repeat(32)
+        assertEquals(fromServer, resolveExpectedDigest(null, fromServer, earlier))
+        assertEquals(earlier, resolveExpectedDigest(null, null, earlier))
+        assertNull(resolveExpectedDigest(null, null, null))
     }
 
     @Test

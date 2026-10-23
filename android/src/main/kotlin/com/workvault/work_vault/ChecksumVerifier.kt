@@ -5,6 +5,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.security.MessageDigest
+import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -105,6 +106,69 @@ internal fun evaluateChecksum(
     }
     return ChecksumVerdict.Verified(sha256 = digests.sha256Hex, md5 = digests.md5Hex)
 }
+
+internal fun sha256HexFromDigestHeader(header: String?): String? {
+    if (header.isNullOrBlank()) {
+        return null
+    }
+    for (part in header.split(',')) {
+        val piece = part.trim()
+        val separator = piece.indexOf('=')
+        if (separator <= 0) {
+            continue
+        }
+        val algorithm = piece.substring(0, separator).trim()
+        if (!algorithm.equals("sha-256", ignoreCase = true)) {
+            continue
+        }
+        val wrapped = piece.substring(separator + 1).trim().removePrefix(":").removeSuffix(":")
+        val raw = try {
+            Base64.getDecoder().decode(wrapped)
+        } catch (_: IllegalArgumentException) {
+            null
+        } ?: continue
+        if (raw.size == 32) {
+            return raw.toHex()
+        }
+    }
+    return null
+}
+
+internal fun md5HexFromContentMd5(header: String?): String? {
+    if (header.isNullOrBlank()) {
+        return null
+    }
+    val raw = try {
+        Base64.getDecoder().decode(header.trim())
+    } catch (_: IllegalArgumentException) {
+        return null
+    }
+    if (raw.size != 16) {
+        return null
+    }
+    return raw.toHex()
+}
+
+internal fun normalizeHexDigest(value: String?, bytes: Int): String? {
+    if (value == null) {
+        return null
+    }
+    val hex = value.trim().lowercase()
+    if (hex.length != bytes * 2 || hex.any { it !in '0'..'9' && it !in 'a'..'f' }) {
+        return null
+    }
+    return hex
+}
+
+/**
+ * Picks the digest a completed file is checked against.
+ *
+ * A digest the caller supplied always wins, so a server cannot vouch for its own bytes. A server
+ * digest is used only when the caller supplied none, and [previous] carries an earlier value
+ * across retries and process restarts.
+ */
+internal fun resolveExpectedDigest(callerSupplied: String?, fromServer: String?, previous: String?): String? =
+    callerSupplied ?: fromServer ?: previous
 
 internal fun ByteArray.toHex(): String {
     val chars = CharArray(size * 2)

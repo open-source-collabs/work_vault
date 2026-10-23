@@ -8,13 +8,13 @@ import kotlin.test.assertTrue
 /**
  * Version 1 ownership rules on the host side.
  *
- * The transfer surface is resumable HTTPS GET. TUS stays behind the method check. The
+ * The transfer surface is resumable HTTPS GET and nothing else. The
  * store is the authority for status, bytes, and the entity tag, and the projection it
  * sends to the headless isolate carries exactly that state.
  */
 internal class WorkVaultOwnershipTest {
     @Test
-    fun aGetTaskNeverRoutesToTheTusHandler() {
+    fun aGetTaskAlwaysRoutesToTheResumableEngine() {
         assertEquals(TransferKind.RESUMABLE_GET, transferKind(ownedConfig()))
         assertEquals(
             TransferKind.RESUMABLE_GET,
@@ -27,23 +27,17 @@ internal class WorkVaultOwnershipTest {
     }
 
     @Test
-    fun tusRunsOnlyForAnUploadVerbThatCarriesTheProtocolHeaders() {
+    fun everyVerbOtherThanGetIsUnsupportedEvenWithUploadProtocolHeaders() {
         assertEquals(
-            TransferKind.TUS_UPLOAD,
+            TransferKind.UNSUPPORTED,
             transferKind(ownedConfig(method = HttpMethod.POST, headers = mapOf("Tus-Resumable" to "1.0.0"))),
         )
         assertEquals(
-            TransferKind.TUS_UPLOAD,
+            TransferKind.UNSUPPORTED,
             transferKind(ownedConfig(method = HttpMethod.PUT, headers = mapOf("Upload-Metadata" to "filename YQ=="))),
         )
-        assertEquals(
-            TransferKind.UNSUPPORTED,
-            transferKind(ownedConfig(method = HttpMethod.POST)),
-        )
-        assertEquals(
-            TransferKind.UNSUPPORTED,
-            transferKind(ownedConfig(method = HttpMethod.PUT)),
-        )
+        assertEquals(TransferKind.UNSUPPORTED, transferKind(ownedConfig(method = HttpMethod.POST)))
+        assertEquals(TransferKind.UNSUPPORTED, transferKind(ownedConfig(method = HttpMethod.PUT)))
         assertEquals(
             TransferKind.UNSUPPORTED,
             transferKind(ownedConfig(method = HttpMethod.HEAD, headers = mapOf("Tus-Resumable" to "1.0.0"))),

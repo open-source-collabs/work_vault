@@ -10,6 +10,7 @@ iOS downloads run in a background `URLSession` and survive process termination. 
 - **Flutter**: 3.47 or newer
 - **Android**: 8.0 (API 26)+ via WorkManager
 - **iOS**: 15+ via Background `URLSession`
+- **macOS**: Desktop engine with resumable streaming and SQLite persistence (`package:sqlite3`). Runs while the app is open. See [macOS](#macos)
 - **Windows**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
 - **Linux**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
 - **Web**: In-browser Fetch & Streams API with web database persistence and browser save triggers
@@ -20,7 +21,7 @@ iOS downloads run in a background `URLSession` and survive process termination. 
 | --- | --- | --- | --- |
 | Android | WorkManager | Yes | Headless `FlutterEngine` delivers events |
 | iOS | Background `URLSession` | Yes | Host forwards system events (see below) |
-| Windows / Linux | Dart isolate + `sqlite3` | No, resumes on next launch | `Range` requests from persisted state |
+| macOS / Windows / Linux | Dart isolate + `sqlite3` | No, resumes on next launch | `Range` requests from persisted state |
 | Web | Fetch + Streams | No, the tab must stay open | Buffers in memory; `pause`/`resume` continue within the page session; browser download saves the file |
 
 Every platform resumes with `Range` and needs a server that honors it. A changed `ETag` (checked with `If-Range`) or a `416` restarts the download from zero. On web, the server must expose `ETag` and `Content-Range` through CORS (`Access-Control-Expose-Headers`) and allow the `Range` header. Web progress is lost on page reload.
@@ -53,13 +54,36 @@ WorkVault.instance.watchProgress(snapshot.taskId).listen((TaskProgress progress)
 
 ## Version 1 contract
 
-One behavior ships: a resumable HTTPS `GET`, the same on Android and iOS. The stored verb is the only routing gate, so a `GET` is never handed to the TUS upload handler and a verb the download engine cannot resume is never started.
+One behavior ships: a resumable HTTPS `GET`, the same on Android and iOS. The stored verb is the only routing gate, so a verb the download engine cannot resume is never started.
 
 The host store owns `status`, the byte count, the entity tag, and the resume position those two describe. SQLite is the projection the headless callback reads, not a second source of truth: every host event carries the same snapshot the UI isolate would have received, and a field the host does not know clears the stored one. `initialize` reads the host, so a row left behind by an earlier run never seeds the vault.
 
 Checksums follow the same split. The native verifier hashes a finished file and decides `completed` or `failed`. Hashing in Dart only records `verified`, `mismatch`, or `missing` against the digest already on record; it never moves a task to another status.
 
 Call `initialize` before enqueueing. It loads tasks that finished while the app was gone. Host progress and status events are delivered only while an engine is attached.
+
+### Expected digests (Android)
+
+To have the native verifier check a download against a known digest, put it in the task headers:
+
+```dart
+WorkTaskConfig(
+  taskId: 'archive-1',
+  url: 'https://cdn.example.com/archive.bin',
+  destinationPath: '/data/user/0/archive.bin',
+  headers: {'X-Work-Vault-Sha256': '<64 hex characters>'},
+  notification: notification,
+);
+```
+
+- `X-Work-Vault-Sha256` takes a SHA-256 digest and `X-Work-Vault-Md5` takes an MD5 digest, as hex. Case and surrounding whitespace are ignored.
+- Both headers are local. They are removed before the request is sent and never reach the server.
+- If the server answers with a `Digest` header carrying a SHA-256 and no expected digest was supplied, that value is used.
+- A value that is not valid hex of the right length fails the task before any bytes are fetched.
+- The file is hashed before the task becomes `completed`. A digest that does not match ends the task as `failed` with the failure code `checksum`, and it is not retried.
+- A completed file that is missing or unreadable at that point fails with the code `io` and is retryable.
+
+iOS does not read these headers yet, so a task there is never checked against an expected digest. Dart still records `verified`, `mismatch`, or `missing` for a completed file on both platforms, as described above.
 
 ## iOS
 
@@ -90,6 +114,30 @@ WorkVaultBackgroundEvents.handleEvents(
 ```
 
 `any` allows every network. `unmetered` waits for a non-cellular, non-expensive path. `notRoaming` allows cellular and refuses expensive paths, which is how iOS represents roaming. A task that requires external power or a non-low battery stays enqueued until the maintenance task, or the next `initialize`, sees that condition.
+
+## macOS
+
+macOS uses the same desktop engine as Windows and Linux: a resumable HTTPS `GET` streamed with `Range` requests, with task state in SQLite. The transfer runs while the app is running. Unlike Android and iOS, there is no system service that continues a download after the app quits.
+
+A sandboxed macOS app needs permission to make network requests, or every download fails with `Operation not permitted`. Add this to `macos/Runner/DebugProfile.entitlements` and `macos/Runner/Release.entitlements`:
+
+```xml
+<key>com.apple.security.network.client</key>
+<true/>
+```
+
+A destination path must be somewhere the sandbox lets the app write, for example the app's container or a folder the user picked.
+
+## Running the tests
+
+```sh
+flutter test                                    # Dart
+cd example/android && ./gradlew :work_vault:testDebugUnitTest   # Android
+cd example/ios && xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+  -destination 'platform=iOS Simulator,name=<a simulator you have>' -only-testing:RunnerTests   # iOS
+```
+
+Build the example once first (`flutter build apk --debug` and `flutter build ios --simulator --no-codesign` from `example/`) so the Gradle wrapper and Flutter's generated iOS packages exist. The iOS tests drive `WorkVaultSessionManager` with background sessions turned off, so they run without a network.
 
 ## Background callbacks
 
