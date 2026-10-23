@@ -1,3 +1,10 @@
+## Unreleased
+
+* Add CI (analyze, format, unit, web, Android, iOS, Pigeon drift), Dependabot, issue and PR templates, `SECURITY.md`, and `CONTRIBUTING.md`.
+* Document per-platform guarantees in the README.
+* Format the Dart sources with `dart format`.
+* Web: `resume` continues a paused download with `Range`/`If-Range` instead of refetching from byte 0, restarts on a changed `ETag` or `416`, and sends `WorkTaskConfig.headers` (previously ignored on web).
+
 ## 0.2.0
 
 * Add official support for **Windows**, **Linux**, and **Web**.

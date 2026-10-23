@@ -14,6 +14,17 @@ iOS downloads run in a background `URLSession` and survive process termination. 
 - **Linux**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
 - **Web**: In-browser Fetch & Streams API with web database persistence and browser save triggers
 
+## Platform guarantees
+
+| Platform | Engine | Survives app termination | Notes |
+| --- | --- | --- | --- |
+| Android | WorkManager | Yes | Headless `FlutterEngine` delivers events |
+| iOS | Background `URLSession` | Yes | Host forwards system events (see below) |
+| Windows / Linux | Dart isolate + `sqlite3` | No, resumes on next launch | `Range` requests from persisted state |
+| Web | Fetch + Streams | No, the tab must stay open | Buffers in memory; `pause`/`resume` continue within the page session; browser download saves the file |
+
+Every platform resumes with `Range` and needs a server that honors it. A changed `ETag` (checked with `If-Range`) or a `416` restarts the download from zero. On web, the server must expose `ETag` and `Content-Range` through CORS (`Access-Control-Expose-Headers`) and allow the `Range` header. Web progress is lost on page reload.
+
 ## Usage
 
 ```dart
