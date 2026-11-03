@@ -55,7 +55,11 @@ jobs:
       # Exchanges the OIDC token for pub.dev credentials.
       - uses: dart-lang/setup-dart@v1
       - run: flutter pub get
-      - run: flutter pub publish --force
+      # pub.dev documents `dart pub publish` for OIDC publishing; the OIDC
+      # token is created by setup-dart above. FLUTTER_ROOT (set by
+      # flutter-action) lets `dart pub` resolve the Flutter SDK dependency, as
+      # the dry runs in ci.yml already do.
+      - run: dart pub publish --force
 
   github-release:
     name: GitHub release
