@@ -1,0 +1,7 @@
+# Default reviewer for everything. GitHub requests a review from these owners.
+* @umais-codes
+
+# Changes here affect users on every platform or the release process.
+/pigeons/ @umais-codes
+/.github/workflows/ @umais-codes
+/pubspec.yaml @umais-codes

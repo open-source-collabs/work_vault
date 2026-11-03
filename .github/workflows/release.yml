@@ -1,0 +1,83 @@
+name: Release
+
+# Publishes to pub.dev through automated publishing (GitHub OIDC), so no token
+# is stored. One-time setup on pub.dev: Admin > Automated publishing > enable
+# publishing from GitHub Actions, repository open-source-collabs/work_vault,
+# tag pattern `v{{version}}`, and require the `pub.dev` environment.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify tag and run checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Tag matches pubspec version
+        run: |
+          VERSION=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '[:space:]')
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pubspec version v$VERSION" >&2
+            exit 1
+          fi
+      - name: Versions agree
+        run: dart run tool/check_versions.dart
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter test --platform chrome test/web
+      - run: dart pub publish --dry-run
+
+  publish:
+    name: Publish to pub.dev
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: pub.dev
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      # Exchanges the OIDC token for pub.dev credentials.
+      - uses: dart-lang/setup-dart@v1
+      - run: flutter pub get
+      - run: flutter pub publish --force
+
+  github-release:
+    name: GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            $0 ~ "^## " v "$" { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG.md section for $VERSION" >&2
+            exit 1
+          fi
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
