@@ -1,3 +1,7 @@
+## 0.4.1
+
+* Republish of 0.4.0, which was retracted. There are no code changes.
+
 ## 0.4.0
 
 * **Breaking (pre-1.0 API trim):** `package:work_vault/work_vault.dart` no longer exports `workVaultBackgroundChannel`, `workVaultBackgroundEntrypoint`, `workVaultBackgroundLibrary` or `registerWorkVaultBackgroundHandler`. The native hosts carry their own copy of those names, and `WorkVault.registerBackgroundHandler` is the supported way to register a handler. `workVaultBackgroundMain` stays exported. To migrate, replace `registerWorkVaultBackgroundHandler(handler)` with `WorkVault.registerBackgroundHandler(handler)`; the removed constants have no replacement because they only describe the native host contract.
