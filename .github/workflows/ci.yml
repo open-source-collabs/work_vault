@@ -41,7 +41,16 @@ jobs:
       - run: flutter test --coverage
       - name: Web tests
         run: flutter test --platform chrome test/web
+      # Informational: a tool that rewrites checked-in files shows up here
+      # instead of as an opaque publish warning.
+      - name: Report working tree changes
+        if: always()
+        run: |
+          git status --short
+          git --no-pager diff
+      # Checks the package contents, not SDK compatibility, so once is enough.
       - name: Pub dry run
+        if: matrix.version == ''
         run: dart pub publish --dry-run
       - name: Keep coverage report
         if: matrix.version == ''
