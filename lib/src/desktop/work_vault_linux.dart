@@ -1,5 +1,5 @@
-import 'desktop_work_vault_engine.dart';
 import '../engine/engine_registry.dart';
+import 'desktop_work_vault_engine.dart';
 
 /// Linux platform plugin registration for work_vault.
 final class WorkVaultLinux {

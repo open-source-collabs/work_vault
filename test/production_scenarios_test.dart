@@ -1216,7 +1216,7 @@ final List<_TransitionCase> _transitions = <_TransitionCase>[
       _TransitionCase(
         status,
         command,
-        _legal["${status.name}:${command.name}"],
+        _legal['${status.name}:${command.name}'],
       ),
 ];
 
