@@ -13,6 +13,7 @@ import '../persistence/work_vault_database.dart';
 
 /// Worker that performs one resumable HTTP GET download on desktop (Windows/Linux/macOS).
 final class DesktopDownloadWorker {
+  /// Creates a worker for [config], persisting state to [database].
   DesktopDownloadWorker({
     required this.config,
     required this.database,
@@ -21,10 +22,19 @@ final class DesktopDownloadWorker {
     this.httpClientFactory,
   });
 
+  /// The task this worker downloads.
   final WorkTaskConfig config;
+
+  /// Store that holds the resume position and entity tag.
   final WorkVaultDatabase database;
+
+  /// Called as bytes arrive.
   final void Function(TaskProgress progress) onProgress;
+
+  /// Called on every status change.
   final void Function(TaskSnapshot snapshot) onStatusChanged;
+
+  /// Builds the HTTP client, or null for the default.
   final HttpClient Function()? httpClientFactory;
 
   HttpClient? _client;

@@ -1,3 +1,16 @@
+## Unreleased
+
+* **Breaking (pre-1.0 API trim):** `package:work_vault/work_vault.dart` no longer exports `workVaultBackgroundChannel`, `workVaultBackgroundEntrypoint`, `workVaultBackgroundLibrary` or `registerWorkVaultBackgroundHandler`. The native hosts carry their own copy of those names, and `WorkVault.registerBackgroundHandler` is the supported way to register a handler. `workVaultBackgroundMain` stays exported.
+
+* Update `pigeon` to 29.1.0 (pinned) and regenerate the Dart, Kotlin, and Swift bindings. The wire format is unchanged.
+* Enable stricter lints (`always_declare_return_types`, `avoid_dynamic_calls`, `cancel_subscriptions`, `directives_ordering`, `prefer_final_in_for_each`, `prefer_single_quotes`, `unnecessary_lambdas`) and fix what they reported.
+* Add a tag-triggered release workflow (pub.dev automated publishing), `CODE_OF_CONDUCT.md`, `SUPPORT.md`, `CODEOWNERS`, and a stability and scope section in the README.
+* Document every public member and enforce it with the `public_member_api_docs` lint.
+* Fix the iOS podspec version, which still said 0.1.0, and add `tool/check_versions.dart`, which CI runs to keep the pubspec, podspec, changelog and example lockfile versions in agreement.
+* Add `homepage` and more specific `topics` to the pub.dev listing.
+* README no longer points users at a `src/` import for the background entrypoint.
+* Replace the boilerplate example README and repair the garbled Pigeon instructions in `CONTRIBUTING.md`.
+
 ## 0.3.2
 
 * Web: Persist `TaskStatus.running` to the task store on `start` and `resume` so `getTask` immediately reflects the active state.

@@ -60,7 +60,7 @@ void main() {
 
     engine.setObserver(
       _TestObserver(
-        onProgressCallback: (TaskProgress p) => progressSamples.add(p),
+        onProgressCallback: progressSamples.add,
         onStatusCallback: (TaskSnapshot s) {
           if (s.status == TaskStatus.completed) {
             if (!completedCompleter.isCompleted) {

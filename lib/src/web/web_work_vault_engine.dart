@@ -16,6 +16,7 @@ import 'range_resume.dart';
 
 /// [WorkVaultEngine] implementation for Web environments.
 final class WebWorkVaultEngine implements WorkVaultEngine {
+  /// Creates the engine. [database] defaults to an in-memory store.
   WebWorkVaultEngine({WorkVaultDatabase? database})
     : _database = database ?? WorkVaultDatabase.memory();
 
@@ -231,6 +232,8 @@ final class _WebDownloadSession {
         ...config.headers,
         ...resumeRequestHeaders(offset, eTag: _eTag),
       };
+      // A tearoff of the JS interop `append` does not compile for the web.
+      // ignore: unnecessary_lambdas
       headers.forEach((String name, String value) {
         requestHeaders.append(name, value);
       });

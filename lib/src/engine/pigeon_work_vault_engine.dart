@@ -1,10 +1,10 @@
 import 'package:flutter/services.dart';
 
+import '../gen/messages.g.dart' as pigeon;
 import '../mapping/pigeon_mapper.dart';
 import '../models/task_snapshot.dart';
 import '../models/work_task_config.dart';
 import 'work_vault_engine.dart';
-import '../gen/messages.g.dart' as pigeon;
 
 /// [WorkVaultEngine] backed by the generated Pigeon host API.
 final class PigeonWorkVaultEngine implements WorkVaultEngine {

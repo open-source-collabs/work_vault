@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 import 'dart:ui' show CallbackHandle, PluginUtilities;
 
-import '../utils/file_hasher.dart';
-export '../utils/file_hasher.dart' show sha256HexOfFile;
-
 import '../persistence/work_vault_database.dart';
+import '../utils/file_hasher.dart';
+
+export '../utils/file_hasher.dart' show sha256HexOfFile;
 
 /// User callback invoked from the headless engine.
 ///
@@ -132,7 +132,7 @@ Future<void> invokeWorkVaultCallback(
   if (callback == null) {
     return;
   }
-  final Object? value = callback(event);
+  final Object? value = Function.apply(callback, <Object?>[event]);
   if (value is Future<Object?>) {
     await value;
   }

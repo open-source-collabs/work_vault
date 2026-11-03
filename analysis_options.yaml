@@ -9,9 +9,18 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    - lib/src/gen/**
 
 linter:
   rules:
+    always_declare_return_types: true
+    avoid_dynamic_calls: true
     avoid_print: true
+    cancel_subscriptions: true
+    directives_ordering: true
+    prefer_final_in_for_each: true
     prefer_final_locals: true
+    prefer_single_quotes: true
+    unnecessary_lambdas: true
+    public_member_api_docs: true
     unawaited_futures: true

@@ -1,7 +1,17 @@
 import 'models/task_status.dart';
 
 /// A command the caller can issue against a non-terminal task.
-enum TaskCommand { pause, resume, cancel }
+enum TaskCommand {
+  /// Legal from [TaskStatus.running].
+  pause,
+
+  /// Legal from [TaskStatus.paused].
+  resume,
+
+  /// Legal from [TaskStatus.enqueued], [TaskStatus.running], or
+  /// [TaskStatus.paused].
+  cancel,
+}
 
 /// Next status after [command], or null when the command is illegal.
 ///

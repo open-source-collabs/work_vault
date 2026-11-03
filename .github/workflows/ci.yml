@@ -5,29 +5,60 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   dart:
-    name: Analyze & test
+    name: Analyze & test (Flutter ${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: stable
+            version: ''
+          # Keep in step with `environment.flutter` in pubspec.yaml.
+          - name: minimum 3.47.0
+            version: '3.47.0'
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ matrix.version }}
           cache: true
       - run: flutter pub get
+      - name: Versions agree (pubspec, podspec, changelog, example lockfile)
+        run: dart run tool/check_versions.dart
       - name: Format
         run: dart format --output=none --set-exit-if-changed $(git ls-files '*.dart' | grep -v '\.g\.dart$')
       - run: flutter analyze
       - run: flutter test --coverage
       - name: Web tests
         run: flutter test --platform chrome test/web
+      # Informational: a tool that rewrites checked-in files shows up here
+      # instead of as an opaque publish warning.
+      - name: Report working tree changes
+        if: always()
+        run: |
+          git status --short
+          git --no-pager diff
+      # Checks the package contents, not SDK compatibility, so once is enough.
       - name: Pub dry run
+        if: matrix.version == ''
         run: dart pub publish --dry-run
+      - name: Keep coverage report
+        if: matrix.version == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: error
 
   pigeon:
     name: Generated code is current
@@ -44,6 +75,37 @@ jobs:
         run: dart format lib/src/gen/messages.g.dart
       - name: Fail on drift
         run: git diff --exit-code
+
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: windows-latest
+            target: windows
+          - os: macos-latest
+            target: macos
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux build dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Desktop engine tests
+        run: flutter test test/desktop_work_vault_engine_test.dart test/desktop_plugin_registration_test.dart test/work_vault_database_test.dart
+      - name: Build example
+        working-directory: example
+        run: flutter build ${{ matrix.target }} --debug
 
   android:
     name: Android unit tests
@@ -67,7 +129,7 @@ jobs:
         run: ./gradlew :work_vault:testDebugUnitTest
 
   ios:
-    name: iOS build
+    name: iOS build & Swift tests
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -76,5 +138,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - working-directory: example
-        run: flutter build ios --no-codesign --debug
+      - name: Build example
+        working-directory: example
+        run: flutter build ios --simulator --no-codesign --debug
+      - name: Swift unit tests
+        working-directory: example/ios
+        run: |
+          SIMULATOR=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [^(]+' | sed 's/ *$//')
+          echo "Testing on: $SIMULATOR"
+          xcodebuild test \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -destination "platform=iOS Simulator,name=$SIMULATOR" \
+            -only-testing:RunnerTests

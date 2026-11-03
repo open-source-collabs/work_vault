@@ -8,13 +8,7 @@ library;
 // `WorkVaultWindows` from this library, so they must be exported here.
 export 'src/desktop/desktop_plugins_io.dart'
     if (dart.library.js_interop) 'src/desktop/desktop_plugins_stub.dart';
-export 'src/isolate/background_entry_point.dart'
-    show
-        registerWorkVaultBackgroundHandler,
-        workVaultBackgroundChannel,
-        workVaultBackgroundEntrypoint,
-        workVaultBackgroundLibrary,
-        workVaultBackgroundMain;
+export 'src/isolate/background_entry_point.dart' show workVaultBackgroundMain;
 export 'src/isolate/background_event_processor.dart'
     show WorkVaultBackgroundEvent, WorkVaultBackgroundHandler;
 export 'src/models/battery_constraint.dart';

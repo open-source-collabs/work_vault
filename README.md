@@ -1,6 +1,10 @@
 # work_vault
 
-Type-safe background downloads for Flutter. Dart schedules, pauses, resumes, cancels, and observes work. The host process owns the transfer.
+[![pub package](https://img.shields.io/pub/v/work_vault.svg)](https://pub.dev/packages/work_vault)
+[![CI](https://github.com/open-source-collabs/work_vault/actions/workflows/ci.yml/badge.svg)](https://github.com/open-source-collabs/work_vault/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+
+Type-safe, resumable background downloads for Flutter. Dart schedules, pauses, resumes, cancels, and observes work. The host process owns the transfer.
 
 iOS downloads run in a background `URLSession` and survive process termination. Android downloads run in WorkManager. When the UI engine is gone, the host starts a headless `FlutterEngine` at `workVaultBackgroundMain` and delivers events on a platform channel. Task rows, resume tokens, and SHA-256 status live in a SQLite file both isolates open. There is no `IsolateNameServer`.
 
@@ -14,6 +18,12 @@ iOS downloads run in a background `URLSession` and survive process termination. 
 - **Windows**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
 - **Linux**: Desktop background isolate engine with SQLite persistence (`package:sqlite3`)
 - **Web**: In-browser Fetch & Streams API with web database persistence and browser save triggers
+
+## Stability and scope
+
+`work_vault` is pre-1.0. The public API in `package:work_vault/work_vault.dart` can still change between minor versions, and every breaking change is called out in the [CHANGELOG](CHANGELOG.md). Version 1.0 will follow once the public API is settled and every platform in the table below is exercised in CI.
+
+Out of scope in this version: uploads and any verb other than `GET`, downloads that continue after the app quits on macOS, Windows, Linux, and Web, and expected-digest checks on iOS. See [Platform guarantees](#platform-guarantees).
 
 ## Platform guarantees
 
@@ -154,7 +164,7 @@ Future<void> onWorkVaultBackground(WorkVaultBackgroundEvent event) async {
 await WorkVault.registerBackgroundHandler(onWorkVaultBackground);
 ```
 
-The host entrypoint is `workVaultBackgroundMain` in `package:work_vault/src/isolate/background_entry_point.dart`. A completed file is hashed there. `verificationStatus` is `verified` for the first digest, `mismatch` when a later hash differs, and `missing` when the file is gone. Progress rows keep an existing digest.
+The host runs `workVaultBackgroundMain` (exported from `package:work_vault/work_vault.dart`) in the headless engine; your app never calls it. A completed file is hashed there. `verificationStatus` is `verified` for the first digest, `mismatch` when a later hash differs, and `missing` when the file is gone. Progress rows keep an existing digest.
 
 ## Contract
 
