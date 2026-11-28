@@ -1,4 +1,4 @@
-## Unreleased
+## 0.5.0
 
 * **Security:** the desktop engine (Windows, macOS, Linux) no longer accepts every TLS certificate. It installed a `badCertificateCallback` that returned `true`, so a man-in-the-middle could serve any file. Certificates are now checked against the platform trust store, and a download from a server with an untrusted or self-signed certificate fails.
 * Add `WorkTaskConfig.expectedSha256`. Windows, macOS, Linux and the web now hash the completed file and compare it with this digest, or with the `X-Work-Vault-Sha256` header. A mismatch ends the task as `failed` with the failure code `checksum` and is not retried. On Android the value is passed to the existing native verifier through that header. iOS does not check it yet. A malformed digest, or a field and header that disagree, now fails `validate`.
