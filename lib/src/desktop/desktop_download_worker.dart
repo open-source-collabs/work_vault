@@ -407,6 +407,10 @@ final class DesktopDownloadWorker {
         downloadedBytes: downloadedBytes,
         sha256: sha256,
         verificationStatus: verificationStatus,
+        failureCode: code,
+        failureMessage: message,
+        failureHttpStatus: httpStatus,
+        failureRetryable: retryable,
       ),
     );
 

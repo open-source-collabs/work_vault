@@ -168,9 +168,14 @@ void main() {
     const String abcDigest =
         'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 
-    Future<({TaskSnapshot terminal, Map<String, String?> sent})> run(
-      WorkTaskConfig config,
-    ) async {
+    Future<
+      ({
+        TaskSnapshot terminal,
+        Map<String, String?> sent,
+        DesktopWorkVaultEngine engine,
+      })
+    >
+    run(WorkTaskConfig config) async {
       final Map<String, String?> sent = <String, String?>{};
       final FakeHttpClient fakeClient = FakeHttpClient(
         onGetUrl: (Uri uri) {
@@ -213,6 +218,7 @@ void main() {
       return (
         terminal: await terminal.future.timeout(const Duration(seconds: 3)),
         sent: sent,
+        engine: engine,
       );
     }
 
@@ -250,6 +256,19 @@ void main() {
       expect(stored?.verificationStatus, Sha256VerificationStatus.mismatch);
       expect(stored?.sha256, abcDigest);
       expect(stored?.downloadedBytes, 3);
+
+      // Read back from storage, the failure keeps its code and message.
+      final TaskSnapshot? reread = await result.engine.getTask('sha-mismatch');
+      expect(reread?.failure, result.terminal.failure);
+      // A new engine over the same store, as after an app restart.
+      final DesktopWorkVaultEngine restarted = DesktopWorkVaultEngine(
+        database: database,
+      );
+      await restarted.initialize();
+      final TaskSnapshot? afterRestart = await restarted.getTask(
+        'sha-mismatch',
+      );
+      expect(afterRestart?.failure, result.terminal.failure);
     });
 
     test('the header form is checked and never sent', () async {

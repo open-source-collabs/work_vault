@@ -32,6 +32,10 @@ final class WorkVaultTaskRecord {
     this.totalBytes,
     this.resumptionData,
     this.sha256,
+    this.failureCode,
+    this.failureMessage,
+    this.failureHttpStatus,
+    this.failureRetryable,
   });
 
   /// Stable task identity.
@@ -61,6 +65,20 @@ final class WorkVaultTaskRecord {
   /// Result of the last integrity hash.
   final Sha256VerificationStatus verificationStatus;
 
+  /// Machine-readable reason the task failed, such as `checksum`.
+  ///
+  /// Set only while [status] is `failed`. The other `failure` fields go with it.
+  final String? failureCode;
+
+  /// Human-readable explanation of [failureCode].
+  final String? failureMessage;
+
+  /// HTTP status of the response that failed the task, when there was one.
+  final int? failureHttpStatus;
+
+  /// Whether the failure could succeed if the task were tried again.
+  final bool? failureRetryable;
+
   /// Returns a copy with the given fields replaced.
   WorkVaultTaskRecord copyWith({
     String? status,
@@ -75,6 +93,11 @@ final class WorkVaultTaskRecord {
     bool clearTotalBytes = false,
     bool clearResumption = false,
     bool clearSha256 = false,
+    String? failureCode,
+    String? failureMessage,
+    int? failureHttpStatus,
+    bool? failureRetryable,
+    bool clearFailure = false,
   }) {
     return WorkVaultTaskRecord(
       taskId: taskId,
@@ -88,6 +111,16 @@ final class WorkVaultTaskRecord {
           : resumptionData ?? this.resumptionData,
       sha256: clearSha256 ? null : sha256 ?? this.sha256,
       verificationStatus: verificationStatus ?? this.verificationStatus,
+      failureCode: clearFailure ? null : failureCode ?? this.failureCode,
+      failureMessage: clearFailure
+          ? null
+          : failureMessage ?? this.failureMessage,
+      failureHttpStatus: clearFailure
+          ? null
+          : failureHttpStatus ?? this.failureHttpStatus,
+      failureRetryable: clearFailure
+          ? null
+          : failureRetryable ?? this.failureRetryable,
     );
   }
 }
@@ -102,6 +135,9 @@ abstract interface class WorkVaultDatabase {
   factory WorkVaultDatabase.memory() => openWorkVaultDatabaseMemory();
 
   /// Inserts or updates [record].
+  ///
+  /// The failure fields are always replaced by the ones in [record], so a row
+  /// that leaves `failed` loses its old failure.
   void upsert(
     WorkVaultTaskRecord record, {
     bool clearResumption = false,
@@ -109,6 +145,9 @@ abstract interface class WorkVaultDatabase {
   });
 
   /// Writes the native snapshot of [record] over the stored row.
+  ///
+  /// Host snapshots carry no failure, so the stored failure is kept while the
+  /// status stays `failed` and dropped when it changes.
   void project(WorkVaultTaskRecord record);
 
   /// Replaces every row with [records], the tasks the host still remembers.

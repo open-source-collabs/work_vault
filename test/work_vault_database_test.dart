@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:work_vault/src/isolate/background_event_processor.dart';
 import 'package:work_vault/src/persistence/work_vault_database.dart';
+import 'package:work_vault/src/persistence/work_vault_database_web.dart';
 
 void main() {
   test('round-trips a task, resume token, and handler handle', () {
@@ -138,6 +139,81 @@ void main() {
     expect(event.sha256, isNull);
   });
 
+  group('failure', () {
+    const WorkVaultTaskRecord failed = WorkVaultTaskRecord(
+      taskId: 'job-1',
+      status: 'failed',
+      filePath: '/tmp/archive.bin',
+      downloadedBytes: 3,
+      verificationStatus: Sha256VerificationStatus.mismatch,
+      failureCode: 'checksum',
+      failureMessage: 'SHA-256 does not match.',
+      failureHttpStatus: 412,
+      failureRetryable: false,
+    );
+
+    for (final (String name, WorkVaultDatabase Function() open)
+        in <(String, WorkVaultDatabase Function())>[
+          ('sqlite', WorkVaultDatabase.memory),
+          ('web', WorkVaultDatabaseWeb.new),
+        ]) {
+      group(name, () {
+        late WorkVaultDatabase database;
+        setUp(() => database = open());
+        tearDown(() => database.close());
+
+        test('round-trips and is replaced by the next upsert', () {
+          database.upsert(failed);
+          final WorkVaultTaskRecord? row = database.getTask('job-1');
+          expect(row?.failureCode, 'checksum');
+          expect(row?.failureMessage, 'SHA-256 does not match.');
+          expect(row?.failureHttpStatus, 412);
+          expect(row?.failureRetryable, isFalse);
+
+          database.upsert(
+            const WorkVaultTaskRecord(
+              taskId: 'job-1',
+              status: 'enqueued',
+              filePath: '/tmp/archive.bin',
+              downloadedBytes: 0,
+              verificationStatus: Sha256VerificationStatus.pending,
+            ),
+          );
+          final WorkVaultTaskRecord? cleared = database.getTask('job-1');
+          expect(cleared?.failureCode, isNull);
+          expect(cleared?.failureMessage, isNull);
+          expect(cleared?.failureHttpStatus, isNull);
+          expect(cleared?.failureRetryable, isNull);
+        });
+
+        test('a host snapshot keeps the failure only while failed', () {
+          database.upsert(failed);
+          database.project(
+            const WorkVaultTaskRecord(
+              taskId: 'job-1',
+              status: 'failed',
+              filePath: '/tmp/archive.bin',
+              downloadedBytes: 3,
+              verificationStatus: Sha256VerificationStatus.pending,
+            ),
+          );
+          expect(database.getTask('job-1')?.failureCode, 'checksum');
+
+          database.project(
+            const WorkVaultTaskRecord(
+              taskId: 'job-1',
+              status: 'enqueued',
+              filePath: '/tmp/archive.bin',
+              downloadedBytes: 0,
+              verificationStatus: Sha256VerificationStatus.pending,
+            ),
+          );
+          expect(database.getTask('job-1')?.failureCode, isNull);
+        });
+      });
+    }
+  });
+
   group('schema version', () {
     late Directory directory;
 
@@ -158,11 +234,11 @@ void main() {
       }
     }
 
-    test('a new file is stamped with version 1', () {
+    test('a new file is stamped with version 2', () {
       final String path = '${directory.path}/new.db';
       WorkVaultDatabase.openFile(path).close();
 
-      expect(storedVersion(path), 1);
+      expect(storedVersion(path), 2);
     });
 
     test('a file written before versioning keeps its rows and is stamped', () {
@@ -193,17 +269,65 @@ void main() {
       database.close();
 
       expect(row?.downloadedBytes, 5);
-      expect(storedVersion(path), 1);
+      expect(row?.failureCode, isNull);
+      expect(storedVersion(path), 2);
+    });
+
+    test('a version 1 file gains the failure columns and keeps its rows', () {
+      final String path = '${directory.path}/v1.db';
+      sqlite.sqlite3.open(path)
+        ..execute('''
+          CREATE TABLE tasks (
+            task_id TEXT PRIMARY KEY NOT NULL,
+            status TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            etag TEXT,
+            downloaded_bytes INTEGER NOT NULL,
+            total_bytes INTEGER,
+            resumption_data BLOB,
+            sha256 TEXT,
+            verification_status TEXT NOT NULL
+          )
+          ''')
+        ..execute(
+          "INSERT INTO tasks VALUES ('old', 'failed', '/tmp/a.bin', NULL, 5, "
+          "NULL, NULL, NULL, 'pending')",
+        )
+        ..execute('PRAGMA user_version = 1')
+        ..close();
+
+      final WorkVaultDatabase database = WorkVaultDatabase.openFile(path);
+      expect(database.getTask('old')?.status, 'failed');
+      expect(database.getTask('old')?.failureCode, isNull);
+      database.upsert(
+        const WorkVaultTaskRecord(
+          taskId: 'old',
+          status: 'failed',
+          filePath: '/tmp/a.bin',
+          downloadedBytes: 5,
+          verificationStatus: Sha256VerificationStatus.pending,
+          failureCode: 'http_404',
+          failureRetryable: false,
+        ),
+      );
+      database.close();
+
+      final WorkVaultDatabase reopened = WorkVaultDatabase.openFile(path);
+      final WorkVaultTaskRecord? row = reopened.getTask('old');
+      reopened.close();
+      expect(row?.failureCode, 'http_404');
+      expect(row?.failureRetryable, isFalse);
+      expect(storedVersion(path), 2);
     });
 
     test('a file from a newer version is refused', () {
       final String path = '${directory.path}/newer.db';
       sqlite.sqlite3.open(path)
-        ..execute('PRAGMA user_version = 2')
+        ..execute('PRAGMA user_version = 3')
         ..close();
 
       expect(() => WorkVaultDatabase.openFile(path), throwsStateError);
-      expect(storedVersion(path), 2);
+      expect(storedVersion(path), 3);
     });
   });
 }

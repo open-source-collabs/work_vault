@@ -51,11 +51,16 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
       '''
       INSERT INTO tasks (
         task_id, status, file_path, etag, downloaded_bytes, total_bytes,
-        resumption_data, sha256, verification_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        resumption_data, sha256, verification_status, failure_code,
+        failure_message, failure_http_status, failure_retryable
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(task_id) DO UPDATE SET
         status = excluded.status,
         file_path = excluded.file_path,
+        failure_code = excluded.failure_code,
+        failure_message = excluded.failure_message,
+        failure_http_status = excluded.failure_http_status,
+        failure_retryable = excluded.failure_retryable,
         etag = COALESCE(excluded.etag, tasks.etag),
         downloaded_bytes = excluded.downloaded_bytes,
         total_bytes = COALESCE(excluded.total_bytes, tasks.total_bytes),
@@ -82,6 +87,7 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
         record.resumptionData,
         record.sha256,
         record.verificationStatus.name,
+        ..._failureValues(record),
         clearResumption ? 1 : 0,
         preserveVerification ? 1 : 0,
         preserveVerification ? 1 : 0,
@@ -103,7 +109,15 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
         etag = excluded.etag,
         downloaded_bytes = excluded.downloaded_bytes,
         total_bytes = excluded.total_bytes,
-        resumption_data = excluded.resumption_data
+        resumption_data = excluded.resumption_data,
+        failure_code = CASE
+          WHEN excluded.status = 'failed' THEN tasks.failure_code END,
+        failure_message = CASE
+          WHEN excluded.status = 'failed' THEN tasks.failure_message END,
+        failure_http_status = CASE
+          WHEN excluded.status = 'failed' THEN tasks.failure_http_status END,
+        failure_retryable = CASE
+          WHEN excluded.status = 'failed' THEN tasks.failure_retryable END
       ''',
       <Object?>[
         record.taskId,
@@ -216,7 +230,11 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
           total_bytes INTEGER,
           resumption_data BLOB,
           sha256 TEXT,
-          verification_status TEXT NOT NULL
+          verification_status TEXT NOT NULL,
+          failure_code TEXT,
+          failure_message TEXT,
+          failure_http_status INTEGER,
+          failure_retryable INTEGER
         )
         ''')
       ..execute('''
@@ -224,8 +242,27 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
           key TEXT PRIMARY KEY NOT NULL,
           value TEXT NOT NULL
         )
-        ''')
-      ..execute('PRAGMA user_version = $_schemaVersion');
+        ''');
+    // Each step only adds what is missing, so an interrupted upgrade finishes
+    // on the next open.
+    _addFailureColumns();
+    _database.execute('PRAGMA user_version = $_schemaVersion');
+  }
+
+  /// Adds the failure columns to a table created by schema version 1 or
+  /// earlier. A newer table already has them.
+  void _addFailureColumns() {
+    final Set<String> existing = <String>{
+      for (final Row row in _database.select('PRAGMA table_info(tasks)'))
+        row['name']! as String,
+    };
+    for (final MapEntry<String, String> column in _failureColumns.entries) {
+      if (!existing.contains(column.key)) {
+        _database.execute(
+          'ALTER TABLE tasks ADD COLUMN ${column.key} ${column.value}',
+        );
+      }
+    }
   }
 
   WorkVaultTaskRecord _read(Row row) {
@@ -233,6 +270,7 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
     final Object? resume = row['resumption_data'];
     final Object? digest = row['sha256'];
     final Object? etag = row['etag'];
+    final Object? retryable = row['failure_retryable'];
     Uint8List? bytes;
     if (resume is Uint8List) {
       bytes = Uint8List.fromList(resume);
@@ -251,12 +289,37 @@ final class WorkVaultDatabaseIO implements WorkVaultDatabase {
       verificationStatus: Sha256VerificationStatus.values.byName(
         row['verification_status']! as String,
       ),
+      failureCode: row['failure_code'] as String?,
+      failureMessage: row['failure_message'] as String?,
+      failureHttpStatus: row['failure_http_status'] as int?,
+      failureRetryable: retryable is int ? retryable != 0 : null,
     );
   }
 }
 
 const String _handlerKey = 'background_handler';
 
-/// Version of the table layout. Files written before versioning read as 0 and
-/// share this layout, so they are stamped without migration.
-const int _schemaVersion = 1;
+/// Columns added in schema version 2, with their types.
+const Map<String, String> _failureColumns = <String, String>{
+  'failure_code': 'TEXT',
+  'failure_message': 'TEXT',
+  'failure_http_status': 'INTEGER',
+  'failure_retryable': 'INTEGER',
+};
+
+List<Object?> _failureValues(WorkVaultTaskRecord record) {
+  final bool? retryable = record.failureRetryable;
+  return <Object?>[
+    record.failureCode,
+    record.failureMessage,
+    record.failureHttpStatus,
+    retryable == null ? null : (retryable ? 1 : 0),
+  ];
+}
+
+/// Version of the table layout.
+///
+/// - 0: files written before versioning. Same layout as 1.
+/// - 1: the original table.
+/// - 2: adds the failure columns. Older files get them when opened.
+const int _schemaVersion = 2;
