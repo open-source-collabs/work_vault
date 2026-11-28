@@ -10,6 +10,7 @@ import '../models/task_status.dart';
 import '../models/work_task_config.dart';
 import '../models/work_vault_failure.dart';
 import '../task_transition.dart';
+import '../utils/checksum.dart';
 
 /// Encodes [config] as a Pigeon payload.
 pigeon.WorkTaskConfig workTaskConfigToPigeon(WorkTaskConfig config) {
@@ -18,7 +19,7 @@ pigeon.WorkTaskConfig workTaskConfigToPigeon(WorkTaskConfig config) {
     url: config.url,
     destinationPath: config.destinationPath,
     method: _methodToPigeon(config.method),
-    headers: Map<String, String>.of(config.headers),
+    headers: _hostHeaders(config),
     network: _networkToPigeon(config.network),
     retry: pigeon.RetryPolicy(
       maxAttempts: config.retry.maxAttempts,
@@ -37,6 +38,21 @@ pigeon.WorkTaskConfig workTaskConfigToPigeon(WorkTaskConfig config) {
       channelName: config.notification.channelName,
     ),
   );
+}
+
+/// Task headers for the host, with [WorkTaskConfig.expectedSha256] carried in
+/// the local `X-Work-Vault-Sha256` header that the Android host checks.
+Map<String, String> _hostHeaders(WorkTaskConfig config) {
+  final String? expected = normalizeSha256Hex(config.expectedSha256);
+  if (expected == null) {
+    return Map<String, String>.of(config.headers);
+  }
+  final String name = expectedSha256Header.toLowerCase();
+  return <String, String>{
+    for (final MapEntry<String, String> entry in config.headers.entries)
+      if (entry.key.toLowerCase() != name) entry.key: entry.value,
+    expectedSha256Header: expected,
+  };
 }
 
 /// Decodes a host snapshot into the domain model.

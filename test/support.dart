@@ -8,6 +8,7 @@ WorkTaskConfig sampleConfig({
   HttpMethod method = HttpMethod.get,
   Map<String, String> headers = const <String, String>{},
   RetryPolicy retry = const RetryPolicy(),
+  String? expectedSha256,
 }) {
   return WorkTaskConfig(
     taskId: taskId,
@@ -16,6 +17,7 @@ WorkTaskConfig sampleConfig({
     method: method,
     headers: headers,
     retry: retry,
+    expectedSha256: expectedSha256,
     notification: const NotificationMetadata(
       title: 'Archive',
       body: 'Saving archive.bin',

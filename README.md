@@ -72,28 +72,35 @@ Checksums follow the same split. The native verifier hashes a finished file and 
 
 Call `initialize` before enqueueing. It loads tasks that finished while the app was gone. Host progress and status events are delivered only while an engine is attached.
 
-### Expected digests (Android)
+### Expected digests
 
-To have the native verifier check a download against a known digest, put it in the task headers:
+To have a download checked against a known SHA-256, set `expectedSha256`:
 
 ```dart
 WorkTaskConfig(
   taskId: 'archive-1',
   url: 'https://cdn.example.com/archive.bin',
   destinationPath: '/data/user/0/archive.bin',
-  headers: {'X-Work-Vault-Sha256': '<64 hex characters>'},
+  expectedSha256: '<64 hex characters>',
   notification: notification,
 );
 ```
 
-- `X-Work-Vault-Sha256` takes a SHA-256 digest and `X-Work-Vault-Md5` takes an MD5 digest, as hex. Case and surrounding whitespace are ignored.
-- Both headers are local. They are removed before the request is sent and never reach the server.
+- The digest is hex. Case and surrounding whitespace are ignored. A value that is not 64 hex characters makes `validate` (and so `enqueue`) throw `InvalidWorkConfig`.
+- The same digest can be passed as the local header `X-Work-Vault-Sha256`, which is how it reaches the Android host. If both are given they must agree. Android also accepts an MD5 digest in `X-Work-Vault-Md5`.
+- The digest never reaches the server. Every platform, iOS included, removes both local headers before the request is sent.
+- Android, Windows, macOS, Linux and the web check the digest. On desktop the finished file is hashed from disk. On the web each chunk is hashed as it arrives, and a file that does not match is not saved.
+
+On Android:
+
 - If the server answers with a `Digest` header carrying a SHA-256 and no expected digest was supplied, that value is used.
 - A value that is not valid hex of the right length fails the task before any bytes are fetched.
 - The file is hashed before the task becomes `completed`. A digest that does not match ends the task as `failed` with the failure code `checksum`, and it is not retried.
 - A completed file that is missing or unreadable at that point fails with the code `io` and is retryable.
 
-iOS does not read these headers yet, so a task there is never checked against an expected digest. Dart still records `verified`, `mismatch`, or `missing` for a completed file on both platforms, as described above.
+On every platform that checks the digest, a file that does not match ends the task as `failed` with the failure code `checksum`. The task is not retried, and its row records `mismatch` together with the digest that was computed.
+
+iOS does not read `expectedSha256` or these headers yet, so a task there is never checked against an expected digest. Dart still records `verified`, `mismatch`, or `missing` for a completed file on both platforms, as described above.
 
 ## iOS
 

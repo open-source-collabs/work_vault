@@ -30,6 +30,29 @@ void main() {
     expect(payload.notification.channelId, 'work.vault.downloads');
   });
 
+  test('carries expectedSha256 to the host in the local digest header', () {
+    const String digest =
+        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+    final pigeon.WorkTaskConfig payload = workTaskConfigToPigeon(
+      sampleConfig(
+        expectedSha256: digest.toUpperCase(),
+        headers: <String, String>{
+          'Authorization': 'Bearer token',
+          'x-work-vault-sha256': digest,
+        },
+      ),
+    );
+
+    expect(payload.headers, <String, String>{
+      'Authorization': 'Bearer token',
+      'X-Work-Vault-Sha256': digest,
+    });
+    expect(
+      workTaskConfigToPigeon(sampleConfig()).headers,
+      isNot(contains('X-Work-Vault-Sha256')),
+    );
+  });
+
   test('coerces an invalid progress sample', () {
     final TaskProgress progress = taskProgressFromPigeon(
       pigeon.TaskProgress(
