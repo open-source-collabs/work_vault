@@ -94,6 +94,8 @@ void main() {
     expect(stored?.status, TaskStatus.completed.name);
     expect(stored?.verificationStatus, Sha256VerificationStatus.verified);
     expect(stored?.sha256, isNotNull);
+    // An untrusted certificate must fail the request, not be accepted.
+    expect(fakeClient.badCertificateCallback, isNull);
   });
 
   test(

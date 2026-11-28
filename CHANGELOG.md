@@ -1,5 +1,6 @@
 ## Unreleased
 
+* **Security:** the desktop engine (Windows, macOS, Linux) no longer accepts every TLS certificate. It installed a `badCertificateCallback` that returned `true`, so a man-in-the-middle could serve any file. Certificates are now checked against the platform trust store, and a download from a server with an untrusted or self-signed certificate fails.
 * Update `pigeon` to 30.0.4 (pinned) and regenerate the Dart, Kotlin, and Swift bindings. The wire format is unchanged. The Kotlin enum lookups now index the cached enum values by `raw`.
 * Example app: rebuilt as a small download manager on `package:material_ui`. It restores tasks on launch, offers pause, resume and cancel only when `nextTaskStatus` allows them, shows progress, failures and completed-file details with an on-demand SHA-256, and adds a new-download form for network, battery and retry options. No plugin API changes.
 

@@ -126,12 +126,10 @@ final class DesktopDownloadWorker {
     int initialBytes,
     String? initialEtag,
   ) async {
+    // Certificates are checked by the platform's default trust store. No
+    // `badCertificateCallback` is installed, so an untrusted certificate fails
+    // the request instead of being accepted.
     _client = httpClientFactory?.call() ?? HttpClient();
-    _client!.badCertificateCallback = (
-      X509Certificate cert,
-      String host,
-      int port,
-    ) => true;
     final HttpClientRequest request = await _client!.getUrl(
       Uri.parse(config.url),
     );
