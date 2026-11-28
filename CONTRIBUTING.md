@@ -43,7 +43,10 @@ For each release:
 
 The `Release` workflow checks that the tag equals the pubspec version, reruns
 the checks, publishes to pub.dev, and creates a GitHub release from the
-changelog section.
+changelog section. If the version is already on pub.dev (for example it was
+published by hand with `dart pub publish`), the upload is skipped, and an
+existing GitHub release for the tag is left unchanged, so the run still
+succeeds.
 
 ## Platform contract
 

@@ -48,18 +48,46 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      # A version published by hand (`dart pub publish`) cannot be published
+      # again, so skip the upload instead of failing. The GitHub release job
+      # still runs. Any answer other than 200 or 404 fails the job, so a
+      # pub.dev outage never looks like "not published yet".
+      - name: Check whether this version is already on pub.dev
+        id: published
+        run: |
+          NAME=$(sed -n 's/^name:[[:space:]]*//p' pubspec.yaml | tr -d '[:space:]')
+          VERSION="${GITHUB_REF_NAME#v}"
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://pub.dev/api/packages/$NAME/versions/$VERSION")
+          case "$STATUS" in
+            200)
+              echo "::notice::$NAME $VERSION is already on pub.dev; skipping publish."
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "pub.dev answered HTTP $STATUS for $NAME $VERSION" >&2
+              exit 1
+              ;;
+          esac
       - uses: subosito/flutter-action@v2
+        if: steps.published.outputs.exists != 'true'
         with:
           channel: stable
           cache: true
       # Exchanges the OIDC token for pub.dev credentials.
       - uses: dart-lang/setup-dart@v1
+        if: steps.published.outputs.exists != 'true'
       - run: flutter pub get
+        if: steps.published.outputs.exists != 'true'
       # pub.dev documents `dart pub publish` for OIDC publishing; the OIDC
       # token is created by setup-dart above. FLUTTER_ROOT (set by
       # flutter-action) lets `dart pub` resolve the Flutter SDK dependency, as
       # the dry runs in ci.yml already do.
       - run: dart pub publish --force
+        if: steps.published.outputs.exists != 'true'
 
   github-release:
     name: GitHub release
@@ -81,7 +109,13 @@ jobs:
             echo "No CHANGELOG.md section for $VERSION" >&2
             exit 1
           fi
+      # A release made by hand for this tag is kept as it is, not replaced.
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::Release $GITHUB_REF_NAME already exists; leaving it unchanged."
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
