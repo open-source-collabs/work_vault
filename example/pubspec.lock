@@ -58,21 +58,13 @@ packages:
     source: hosted
     version: "1.19.1"
   crypto:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: crypto
       sha256: e3626ae6270383c9e3a549f34c9e4cd26c09ae6a9adaab2bf4737a00340efdc4
       url: "https://pub.dev"
     source: hosted
     version: "3.0.8"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      sha256: b7cc2390aac296c083bea762859413eb1cf5b630c70e0c7e4d831018f762a8b2
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.0"
   cupertino_ui:
     dependency: transitive
     description:
