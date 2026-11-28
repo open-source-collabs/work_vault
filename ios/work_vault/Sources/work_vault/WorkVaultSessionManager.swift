@@ -538,7 +538,11 @@ extension WorkVaultSessionManager {
     }
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
-    request.allHTTPHeaderFields = record.headers
+    // Expected-digest headers are local to the device and never reach the server.
+    request.allHTTPHeaderFields = record.headers.filter { name, _ in
+      let lowered = name.lowercased()
+      return lowered != "x-work-vault-sha256" && lowered != "x-work-vault-md5"
+    }
     return .fresh(request, sessionIdentifier, record.taskId)
   }
 

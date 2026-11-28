@@ -50,12 +50,17 @@ final class WorkVaultDatabaseWeb implements WorkVaultDatabase {
       resumptionData: resumption,
       sha256: sha256,
       verificationStatus: verificationStatus,
+      failureCode: record.failureCode,
+      failureMessage: record.failureMessage,
+      failureHttpStatus: record.failureHttpStatus,
+      failureRetryable: record.failureRetryable,
     );
   }
 
   @override
   void project(WorkVaultTaskRecord record) {
     final WorkVaultTaskRecord? existing = _tasks[record.taskId];
+    final bool keepFailure = record.status == 'failed';
     _tasks[record.taskId] = WorkVaultTaskRecord(
       taskId: record.taskId,
       status: record.status,
@@ -67,6 +72,10 @@ final class WorkVaultDatabaseWeb implements WorkVaultDatabase {
       sha256: existing?.sha256 ?? record.sha256,
       verificationStatus:
           existing?.verificationStatus ?? record.verificationStatus,
+      failureCode: keepFailure ? existing?.failureCode : null,
+      failureMessage: keepFailure ? existing?.failureMessage : null,
+      failureHttpStatus: keepFailure ? existing?.failureHttpStatus : null,
+      failureRetryable: keepFailure ? existing?.failureRetryable : null,
     );
   }
 

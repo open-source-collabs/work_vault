@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../engine/work_vault_engine.dart';
-import '../models/task_failure.dart';
+import '../mapping/record_mapper.dart';
 import '../models/task_progress.dart';
 import '../models/task_snapshot.dart';
 import '../models/task_status.dart';
@@ -176,36 +176,8 @@ final class DesktopWorkVaultEngine implements WorkVaultEngine {
     return records.map(_snapshotFromRecord).toList();
   }
 
-  TaskSnapshot _snapshotFromRecord(WorkVaultTaskRecord record) {
-    final TaskStatus status = TaskStatus.values.byName(record.status);
-    final double? pct = (record.totalBytes != null && record.totalBytes! > 0)
-        ? (record.downloadedBytes / record.totalBytes!) * 100.0
-        : null;
-
-    final TaskProgress progress = TaskProgress(
-      taskId: record.taskId,
-      bytesDownloaded: record.downloadedBytes,
-      totalBytes: record.totalBytes,
-      bytesPerSecond: 0,
-      elapsed: Duration.zero,
-      percentage: pct,
-    );
-
-    return TaskSnapshot(
-      taskId: record.taskId,
-      status: status,
-      progress: progress,
-      failure: status == TaskStatus.failed
-          ? TaskFailure(
-              taskId: record.taskId,
-              code: 'failed',
-              message: 'Transfer failed',
-              httpStatus: null,
-              retryable: false,
-            )
-          : null,
-    );
-  }
+  TaskSnapshot _snapshotFromRecord(WorkVaultTaskRecord record) =>
+      taskSnapshotFromRecord(record);
 
   String _defaultDatabaseDirectory() {
     if (Platform.isWindows) {

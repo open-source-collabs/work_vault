@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:work_vault/src/desktop/desktop_work_vault_engine.dart';
 import 'package:work_vault/src/engine/work_vault_engine.dart';
+import 'package:work_vault/src/models/retry_policy.dart';
 import 'package:work_vault/src/models/task_progress.dart';
 import 'package:work_vault/src/models/task_snapshot.dart';
 import 'package:work_vault/src/models/task_status.dart';
@@ -94,6 +95,8 @@ void main() {
     expect(stored?.status, TaskStatus.completed.name);
     expect(stored?.verificationStatus, Sha256VerificationStatus.verified);
     expect(stored?.sha256, isNotNull);
+    // An untrusted certificate must fail the request, not be accepted.
+    expect(fakeClient.badCertificateCallback, isNull);
   });
 
   test(
@@ -160,6 +163,133 @@ void main() {
       expect(stored?.verificationStatus, Sha256VerificationStatus.verified);
     },
   );
+
+  group('expectedSha256', () {
+    const String abcDigest =
+        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+
+    Future<
+      ({
+        TaskSnapshot terminal,
+        Map<String, String?> sent,
+        DesktopWorkVaultEngine engine,
+      })
+    >
+    run(WorkTaskConfig config) async {
+      final Map<String, String?> sent = <String, String?>{};
+      final FakeHttpClient fakeClient = FakeHttpClient(
+        onGetUrl: (Uri uri) {
+          final FakeHttpClientRequest request = FakeHttpClientRequest();
+          request.onClose = () {
+            for (final String name in <String>[
+              'authorization',
+              'x-work-vault-sha256',
+              'x-work-vault-md5',
+            ]) {
+              sent[name] = request.headers.value(name);
+            }
+            return FakeHttpClientResponse(
+              statusCode: HttpStatus.ok,
+              contentLength: 3,
+              stream: Stream<List<int>>.value(utf8.encode('abc')),
+            );
+          };
+          return request;
+        },
+      );
+      final DesktopWorkVaultEngine engine = DesktopWorkVaultEngine(
+        database: database,
+        httpClientFactory: () => fakeClient,
+      );
+      await engine.initialize();
+      final Completer<TaskSnapshot> terminal = Completer<TaskSnapshot>();
+      engine.setObserver(
+        _TestObserver(
+          onStatusCallback: (TaskSnapshot s) {
+            if ((s.status == TaskStatus.completed ||
+                    s.status == TaskStatus.failed) &&
+                !terminal.isCompleted) {
+              terminal.complete(s);
+            }
+          },
+        ),
+      );
+      await engine.enqueue(config);
+      return (
+        terminal: await terminal.future.timeout(const Duration(seconds: 3)),
+        sent: sent,
+        engine: engine,
+      );
+    }
+
+    test('a matching file completes and is verified', () async {
+      final result = await run(
+        sampleConfig(
+          taskId: 'sha-match',
+          destinationPath: '${tempDir.path}/match.bin',
+          expectedSha256: abcDigest.toUpperCase(),
+        ),
+      );
+
+      expect(result.terminal.status, TaskStatus.completed);
+      final WorkVaultTaskRecord? stored = database.getTask('sha-match');
+      expect(stored?.status, TaskStatus.completed.name);
+      expect(stored?.verificationStatus, Sha256VerificationStatus.verified);
+      expect(stored?.sha256, abcDigest);
+    });
+
+    test('a different file fails with checksum and is not retried', () async {
+      final result = await run(
+        sampleConfig(
+          taskId: 'sha-mismatch',
+          destinationPath: '${tempDir.path}/mismatch.bin',
+          expectedSha256: 'a' * 64,
+          retry: const RetryPolicy(maxAttempts: 3),
+        ),
+      );
+
+      expect(result.terminal.status, TaskStatus.failed);
+      expect(result.terminal.failure?.code, 'checksum');
+      expect(result.terminal.failure?.retryable, isFalse);
+      final WorkVaultTaskRecord? stored = database.getTask('sha-mismatch');
+      expect(stored?.status, TaskStatus.failed.name);
+      expect(stored?.verificationStatus, Sha256VerificationStatus.mismatch);
+      expect(stored?.sha256, abcDigest);
+      expect(stored?.downloadedBytes, 3);
+
+      // Read back from storage, the failure keeps its code and message.
+      final TaskSnapshot? reread = await result.engine.getTask('sha-mismatch');
+      expect(reread?.failure, result.terminal.failure);
+      // A new engine over the same store, as after an app restart.
+      final DesktopWorkVaultEngine restarted = DesktopWorkVaultEngine(
+        database: database,
+      );
+      await restarted.initialize();
+      final TaskSnapshot? afterRestart = await restarted.getTask(
+        'sha-mismatch',
+      );
+      expect(afterRestart?.failure, result.terminal.failure);
+    });
+
+    test('the header form is checked and never sent', () async {
+      final result = await run(
+        sampleConfig(
+          taskId: 'sha-header',
+          destinationPath: '${tempDir.path}/header.bin',
+          headers: <String, String>{
+            'Authorization': 'Bearer token',
+            'X-Work-Vault-Sha256': 'b' * 64,
+            'X-Work-Vault-Md5': 'c' * 32,
+          },
+        ),
+      );
+
+      expect(result.terminal.failure?.code, 'checksum');
+      expect(result.sent['authorization'], 'Bearer token');
+      expect(result.sent['x-work-vault-sha256'], isNull);
+      expect(result.sent['x-work-vault-md5'], isNull);
+    });
+  });
 
   test('cancels a task and updates database', () async {
     final String destinationPath = '${tempDir.path}/cancelled.bin';

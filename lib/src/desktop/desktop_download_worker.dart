@@ -10,6 +10,7 @@ import '../models/task_snapshot.dart';
 import '../models/task_status.dart';
 import '../models/work_task_config.dart';
 import '../persistence/work_vault_database.dart';
+import '../utils/checksum.dart';
 
 /// Worker that performs one resumable HTTP GET download on desktop (Windows/Linux/macOS).
 final class DesktopDownloadWorker {
@@ -126,17 +127,17 @@ final class DesktopDownloadWorker {
     int initialBytes,
     String? initialEtag,
   ) async {
+    // Certificates are checked by the platform's default trust store. No
+    // `badCertificateCallback` is installed, so an untrusted certificate fails
+    // the request instead of being accepted.
     _client = httpClientFactory?.call() ?? HttpClient();
-    _client!.badCertificateCallback = (
-      X509Certificate cert,
-      String host,
-      int port,
-    ) => true;
     final HttpClientRequest request = await _client!.getUrl(
       Uri.parse(config.url),
     );
 
-    for (final MapEntry<String, String> header in config.headers.entries) {
+    for (final MapEntry<String, String> header in wireHeaders(
+      config.headers,
+    ).entries) {
       request.headers.set(header.key, header.value);
     }
 
@@ -252,6 +253,19 @@ final class DesktopDownloadWorker {
             _raf = null;
 
             final String fileSha256 = await _computeSha256(destinationFile);
+            final String? expectedSha256 = config.resolvedExpectedSha256;
+            if (expectedSha256 != null && expectedSha256 != fileSha256) {
+              _fail(
+                code: checksumFailureCode,
+                message:
+                    'SHA-256 of the file does not match the expected digest.',
+                retryable: false,
+                downloadedBytes: downloadedBytes,
+                sha256: fileSha256,
+                verificationStatus: Sha256VerificationStatus.mismatch,
+              );
+              return;
+            }
             database.upsert(
               WorkVaultTaskRecord(
                 taskId: config.taskId,
@@ -375,6 +389,10 @@ final class DesktopDownloadWorker {
     required String message,
     int? httpStatus,
     required bool retryable,
+    int downloadedBytes = 0,
+    String? sha256,
+    Sha256VerificationStatus verificationStatus =
+        Sha256VerificationStatus.pending,
   }) {
     try {
       _raf?.closeSync();
@@ -386,8 +404,13 @@ final class DesktopDownloadWorker {
         taskId: config.taskId,
         status: TaskStatus.failed.name,
         filePath: config.destinationPath,
-        downloadedBytes: 0,
-        verificationStatus: Sha256VerificationStatus.pending,
+        downloadedBytes: downloadedBytes,
+        sha256: sha256,
+        verificationStatus: verificationStatus,
+        failureCode: code,
+        failureMessage: message,
+        failureHttpStatus: httpStatus,
+        failureRetryable: retryable,
       ),
     );
 

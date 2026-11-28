@@ -2,16 +2,17 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
 import 'package:web/web.dart' as web;
 
 import '../engine/work_vault_engine.dart';
+import '../mapping/record_mapper.dart';
 import '../models/task_failure.dart';
 import '../models/task_progress.dart';
 import '../models/task_snapshot.dart';
 import '../models/task_status.dart';
 import '../models/work_task_config.dart';
 import '../persistence/work_vault_database.dart';
+import '../utils/checksum.dart';
 import 'range_resume.dart';
 
 /// [WorkVaultEngine] implementation for Web environments.
@@ -142,36 +143,8 @@ final class WebWorkVaultEngine implements WorkVaultEngine {
     return records.map(_snapshotFromRecord).toList();
   }
 
-  TaskSnapshot _snapshotFromRecord(WorkVaultTaskRecord record) {
-    final TaskStatus status = TaskStatus.values.byName(record.status);
-    final double? pct = (record.totalBytes != null && record.totalBytes! > 0)
-        ? (record.downloadedBytes / record.totalBytes!) * 100.0
-        : null;
-
-    final TaskProgress progress = TaskProgress(
-      taskId: record.taskId,
-      bytesDownloaded: record.downloadedBytes,
-      totalBytes: record.totalBytes,
-      bytesPerSecond: 0,
-      elapsed: Duration.zero,
-      percentage: pct,
-    );
-
-    return TaskSnapshot(
-      taskId: record.taskId,
-      status: status,
-      progress: progress,
-      failure: status == TaskStatus.failed
-          ? TaskFailure(
-              taskId: record.taskId,
-              code: 'failed',
-              message: 'Transfer failed',
-              httpStatus: null,
-              retryable: false,
-            )
-          : null,
-    );
-  }
+  TaskSnapshot _snapshotFromRecord(WorkVaultTaskRecord record) =>
+      taskSnapshotFromRecord(record);
 }
 
 final class _WebDownloadSession {
@@ -187,7 +160,20 @@ final class _WebDownloadSession {
   final void Function(TaskProgress progress) onProgress;
   final void Function(TaskSnapshot snapshot) onStatusChanged;
 
-  final List<int> _buffer = <int>[];
+  /// Response chunks received so far, kept as the browser delivered them.
+  final List<Uint8List> _chunks = <Uint8List>[];
+
+  /// Hash of [_chunks], updated as each chunk arrives.
+  final StreamingSha256 _hash = StreamingSha256();
+
+  /// Bytes held in [_chunks].
+  int get _received => _hash.length;
+
+  void _clearBuffer() {
+    _chunks.clear();
+    _hash.reset();
+  }
+
   String? _eTag;
   bool _isPaused = false;
   bool _isCancelled = false;
@@ -204,7 +190,7 @@ final class _WebDownloadSession {
         taskId: config.taskId,
         status: TaskStatus.running.name,
         filePath: config.destinationPath,
-        downloadedBytes: _buffer.length,
+        downloadedBytes: _received,
         totalBytes: totalBytes,
         eTag: _eTag,
         verificationStatus: Sha256VerificationStatus.pending,
@@ -216,7 +202,7 @@ final class _WebDownloadSession {
         status: TaskStatus.running,
         progress: TaskProgress(
           taskId: config.taskId,
-          bytesDownloaded: _buffer.length,
+          bytesDownloaded: _received,
           totalBytes: null,
           bytesPerSecond: 0,
           elapsed: Duration.zero,
@@ -226,10 +212,10 @@ final class _WebDownloadSession {
     );
 
     try {
-      final int offset = _buffer.length;
+      final int offset = _received;
       final web.Headers requestHeaders = web.Headers();
       final Map<String, String> headers = <String, String>{
-        ...config.headers,
+        ...wireHeaders(config.headers),
         ...resumeRequestHeaders(offset, eTag: _eTag),
       };
       // A tearoff of the JS interop `append` does not compile for the web.
@@ -250,7 +236,7 @@ final class _WebDownloadSession {
 
       if (response.status == 416 && offset > 0 && allowRestart) {
         // The server no longer has the range we hold: start over once.
-        _buffer.clear();
+        _clearBuffer();
         _eTag = null;
         await start(allowRestart: false);
         return;
@@ -268,7 +254,7 @@ final class _WebDownloadSession {
       // 206 continues the buffered prefix. Any other success replaces it.
       final bool continued = response.status == 206 && offset > 0;
       if (!continued) {
-        _buffer.clear();
+        _clearBuffer();
       }
       _eTag = response.headers.get('etag') ?? (continued ? _eTag : null);
 
@@ -291,7 +277,7 @@ final class _WebDownloadSession {
           body.getReader() as web.ReadableStreamDefaultReader;
       final Stopwatch stopwatch = Stopwatch()..start();
       int lastReportTimeMs = 0;
-      int lastReportedBytes = _buffer.length;
+      int lastReportedBytes = _received;
 
       while (!_isPaused && !_isCancelled) {
         final web.ReadableStreamReadResult chunkResult = await reader
@@ -304,23 +290,24 @@ final class _WebDownloadSession {
 
         final JSUint8Array chunk = chunkResult.value as JSUint8Array;
         final Uint8List chunkBytes = chunk.toDart;
-        _buffer.addAll(chunkBytes);
+        _chunks.add(chunkBytes);
+        _hash.add(chunkBytes);
 
         final int nowMs = stopwatch.elapsedMilliseconds;
-        if (nowMs - lastReportTimeMs >= 200 || _buffer.length == totalBytes) {
-          final int deltaBytes = _buffer.length - lastReportedBytes;
+        if (nowMs - lastReportTimeMs >= 200 || _received == totalBytes) {
+          final int deltaBytes = _received - lastReportedBytes;
           final int deltaTimeMs = nowMs - lastReportTimeMs;
           final double speed = deltaTimeMs > 0
               ? (deltaBytes * 1000.0) / deltaTimeMs
               : 0.0;
           final double? pct = (totalBytes != null && totalBytes > 0)
-              ? (_buffer.length / totalBytes) * 100.0
+              ? (_received / totalBytes) * 100.0
               : null;
 
           onProgress(
             TaskProgress(
               taskId: config.taskId,
-              bytesDownloaded: _buffer.length,
+              bytesDownloaded: _received,
               totalBytes: totalBytes,
               bytesPerSecond: speed,
               elapsed: Duration(milliseconds: nowMs),
@@ -329,21 +316,34 @@ final class _WebDownloadSession {
           );
 
           lastReportTimeMs = nowMs;
-          lastReportedBytes = _buffer.length;
+          lastReportedBytes = _received;
         }
       }
 
       if (!_isPaused && !_isCancelled) {
-        final Uint8List allBytes = Uint8List.fromList(_buffer);
-        final String sha256Digest = sha256.convert(allBytes).toString();
+        final int length = _received;
+        final String sha256Digest = _hash.close();
+        final String? expectedSha256 = config.resolvedExpectedSha256;
+        if (expectedSha256 != null && expectedSha256 != sha256Digest) {
+          // The bytes are not what the caller asked for: do not save them.
+          _clearBuffer();
+          _fail(
+            code: checksumFailureCode,
+            message: 'SHA-256 of the file does not match the expected digest.',
+            downloadedBytes: length,
+            sha256: sha256Digest,
+            verificationStatus: Sha256VerificationStatus.mismatch,
+          );
+          return;
+        }
 
         database.upsert(
           WorkVaultTaskRecord(
             taskId: config.taskId,
             status: TaskStatus.completed.name,
             filePath: config.destinationPath,
-            downloadedBytes: allBytes.length,
-            totalBytes: totalBytes ?? allBytes.length,
+            downloadedBytes: length,
+            totalBytes: totalBytes ?? length,
             sha256: sha256Digest,
             verificationStatus: Sha256VerificationStatus.verified,
           ),
@@ -355,8 +355,8 @@ final class _WebDownloadSession {
             status: TaskStatus.completed,
             progress: TaskProgress(
               taskId: config.taskId,
-              bytesDownloaded: allBytes.length,
-              totalBytes: totalBytes ?? allBytes.length,
+              bytesDownloaded: length,
+              totalBytes: totalBytes ?? length,
               bytesPerSecond: 0,
               elapsed: Duration(milliseconds: stopwatch.elapsedMilliseconds),
               percentage: 100,
@@ -365,8 +365,8 @@ final class _WebDownloadSession {
         );
 
         // Trigger browser save
-        _triggerBrowserDownload(config.destinationPath, allBytes);
-        _buffer.clear();
+        _triggerBrowserDownload(config.destinationPath, _chunks);
+        _clearBuffer();
       }
     } catch (error) {
       if (!_isPaused && !_isCancelled) {
@@ -383,7 +383,7 @@ final class _WebDownloadSession {
         taskId: config.taskId,
         status: TaskStatus.paused.name,
         filePath: config.destinationPath,
-        downloadedBytes: _buffer.length,
+        downloadedBytes: _received,
         eTag: _eTag,
         verificationStatus: Sha256VerificationStatus.pending,
       ),
@@ -396,7 +396,7 @@ final class _WebDownloadSession {
   Future<void> cancel() async {
     _isCancelled = true;
     _abortController?.abort();
-    _buffer.clear();
+    _clearBuffer();
     database.upsert(
       WorkVaultTaskRecord(
         taskId: config.taskId,
@@ -412,14 +412,27 @@ final class _WebDownloadSession {
     );
   }
 
-  void _fail({required String code, required String message, int? httpStatus}) {
+  void _fail({
+    required String code,
+    required String message,
+    int? httpStatus,
+    int downloadedBytes = 0,
+    String? sha256,
+    Sha256VerificationStatus verificationStatus =
+        Sha256VerificationStatus.pending,
+  }) {
     database.upsert(
       WorkVaultTaskRecord(
         taskId: config.taskId,
         status: TaskStatus.failed.name,
         filePath: config.destinationPath,
-        downloadedBytes: 0,
-        verificationStatus: Sha256VerificationStatus.pending,
+        downloadedBytes: downloadedBytes,
+        sha256: sha256,
+        verificationStatus: verificationStatus,
+        failureCode: code,
+        failureMessage: message,
+        failureHttpStatus: httpStatus,
+        failureRetryable: false,
       ),
     );
     onStatusChanged(
@@ -437,11 +450,15 @@ final class _WebDownloadSession {
     );
   }
 
-  void _triggerBrowserDownload(String destinationPath, Uint8List bytes) {
+  void _triggerBrowserDownload(String destinationPath, List<Uint8List> chunks) {
     try {
       final String filename = destinationPath.split('/').last.split(r'\').last;
+      // The Blob joins the chunks itself, so they are never copied into one
+      // Dart buffer.
       final web.Blob blob = web.Blob(
-        <web.BlobPart>[bytes.toJS as web.BlobPart].toJS,
+        <web.BlobPart>[
+          for (final Uint8List chunk in chunks) chunk.toJS as web.BlobPart,
+        ].toJS,
       );
       final String url = web.URL.createObjectURL(blob);
       final web.HTMLAnchorElement anchor =

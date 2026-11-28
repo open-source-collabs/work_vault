@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+import '../utils/checksum.dart';
 import 'battery_constraint.dart';
 import 'http_method.dart';
 import 'network_constraint.dart';
@@ -22,6 +23,7 @@ final class WorkTaskConfig {
     this.retry = const RetryPolicy(),
     this.battery = const BatteryConstraint(),
     required this.notification,
+    this.expectedSha256,
   });
 
   /// Stable caller-supplied identity. A second enqueue of the same id fails.
@@ -50,6 +52,29 @@ final class WorkTaskConfig {
 
   /// Notification shown for the life of the transfer.
   final NotificationMetadata notification;
+
+  /// SHA-256 the downloaded file must have, as 64 hex characters.
+  ///
+  /// Case and surrounding whitespace are ignored. When it is set, the file is
+  /// hashed before the task becomes `completed`, and a different
+  /// digest ends the task as failed with the failure code `checksum`. That
+  /// failure is not retried.
+  ///
+  /// The value stays on the device and is never sent to the server. It is
+  /// checked on Android, Windows, macOS, Linux, and the web. iOS does not check
+  /// it yet.
+  ///
+  /// The `X-Work-Vault-Sha256` header in [headers] does the same. If both are
+  /// given they must agree.
+  final String? expectedSha256;
+
+  /// The expected digest from [expectedSha256] or the `X-Work-Vault-Sha256`
+  /// header, as lowercase hex, or null when none was supplied.
+  ///
+  /// Call [validate] first. An invalid value reads as null here.
+  String? get resolvedExpectedSha256 =>
+      normalizeSha256Hex(expectedSha256) ??
+      normalizeSha256Hex(headerValue(headers, expectedSha256Header));
 
   /// Throws [InvalidWorkConfig] when this description cannot be executed.
   void validate() {
@@ -106,6 +131,7 @@ final class WorkTaskConfig {
       );
     }
 
+    _validateChecksums(expectedSha256, headers);
     _validateNotification(notification);
   }
 
@@ -120,6 +146,7 @@ final class WorkTaskConfig {
     RetryPolicy? retry,
     BatteryConstraint? battery,
     NotificationMetadata? notification,
+    String? expectedSha256,
   }) {
     return WorkTaskConfig(
       taskId: taskId ?? this.taskId,
@@ -131,6 +158,7 @@ final class WorkTaskConfig {
       retry: retry ?? this.retry,
       battery: battery ?? this.battery,
       notification: notification ?? this.notification,
+      expectedSha256: expectedSha256 ?? this.expectedSha256,
     );
   }
 
@@ -145,7 +173,8 @@ final class WorkTaskConfig {
         other.network == network &&
         other.retry == retry &&
         other.battery == battery &&
-        other.notification == notification;
+        other.notification == notification &&
+        other.expectedSha256 == expectedSha256;
   }
 
   @override
@@ -159,10 +188,32 @@ final class WorkTaskConfig {
     retry,
     battery,
     notification,
+    expectedSha256,
   );
 
   @override
   String toString() => 'WorkTaskConfig($taskId, $method, $url)';
+}
+
+void _validateChecksums(String? expectedSha256, Map<String, String> headers) {
+  final String? fromField = normalizeSha256Hex(expectedSha256);
+  if (expectedSha256 != null && fromField == null) {
+    throw const InvalidWorkConfig(
+      'expectedSha256 must be a SHA-256 digest of 64 hex characters.',
+    );
+  }
+  final String? header = headerValue(headers, expectedSha256Header);
+  final String? fromHeader = normalizeSha256Hex(header);
+  if (header != null && fromHeader == null) {
+    throw const InvalidWorkConfig(
+      '$expectedSha256Header must be a SHA-256 digest of 64 hex characters.',
+    );
+  }
+  if (fromField != null && fromHeader != null && fromField != fromHeader) {
+    throw const InvalidWorkConfig(
+      'expectedSha256 and the $expectedSha256Header header name different digests.',
+    );
+  }
 }
 
 void _validateNotification(NotificationMetadata notification) {

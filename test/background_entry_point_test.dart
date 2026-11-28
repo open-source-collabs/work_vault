@@ -154,7 +154,7 @@ void main() {
       mockHost(tester);
       final String path = '${directory.path}/newer.db';
       sqlite3.open(path)
-        ..execute('PRAGMA user_version = 2')
+        ..execute('PRAGMA user_version = 3')
         ..close();
       const MethodChannel channel = MethodChannel(workVaultBackgroundChannel);
 
