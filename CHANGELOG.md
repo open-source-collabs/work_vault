@@ -1,3 +1,7 @@
+## Unreleased
+
+* Update `pigeon` to 30.0.4 (pinned) and regenerate the Dart, Kotlin, and Swift bindings. The wire format is unchanged. The Kotlin enum lookups now index the cached enum values by `raw`.
+
 ## 0.4.1
 
 * Republish of 0.4.0, which was retracted. There are no code changes.
