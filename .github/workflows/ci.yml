@@ -54,7 +54,7 @@ jobs:
         run: dart pub publish --dry-run
       - name: Keep coverage report
         if: matrix.version == ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-lcov
           path: coverage/lcov.info
